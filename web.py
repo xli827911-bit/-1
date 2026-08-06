@@ -2584,7 +2584,6 @@ def _schedule_runner():
 def run(host="0.0.0.0", port=5000):
     bot.init_db()
     _load_proxy_from_config()
-    invalidate_all_sessions()  # 清空旧 session，防止部署包迁移后自动登录
     _restore_scheduled_pushes()
     t = threading.Thread(target=_schedule_runner, daemon=True)
     t.start()

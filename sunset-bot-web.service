@@ -1,0 +1,22 @@
+[Unit]
+Description=Sunset Bot v6 - 晚霞推送服务
+After=network.target
+
+[Service]
+Type=forking
+User=root
+WorkingDirectory=/vol1/1000/Docker/sunset-bot-deploy
+PIDFile=/vol1/1000/Docker/sunset-bot-deploy/data/web.pid
+ExecStart=/bin/bash /vol1/1000/Docker/sunset-bot-deploy/start.sh
+ExecStop=/bin/bash /vol1/1000/Docker/sunset-bot-deploy/stop.sh
+Restart=always
+RestartSec=10
+TimeoutStartSec=30
+TimeoutStopSec=15
+
+# 安全加固
+PrivateTmp=true
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

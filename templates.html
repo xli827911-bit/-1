@@ -1,0 +1,4341 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>晚霞推送</title>
+<!-- PWA 支持 -->
+<meta name="theme-color" content="#7c3aed">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="晚霞推送">
+<link rel="manifest" href="/manifest.json">
+<link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌅</text></svg>">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<!-- xterm.js 终端 -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css" />
+<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+<style>
+  :root {
+    --bg-primary: #f8f9fc;
+    --bg-card: rgba(255, 255, 255, 0.85);
+    --bg-sidebar: rgba(255, 255, 255, 0.75);
+    --text-primary: #1a1a2e;
+    --text-secondary: #6b6b80;
+    --text-muted: #a0a0b0;
+    --accent: #7c3aed;
+    --accent-light: #a78bfa;
+    --accent-dark: #5b21b6;
+    --success: #10b981;
+    --warning: #f59e0b;
+    --danger: #ef4444;
+    --border: rgba(124, 58, 237, 0.1);
+    --shadow: 0 8px 32px rgba(124, 58, 237, 0.1);
+    --shadow-hover: 0 12px 48px rgba(124, 58, 237, 0.18);
+    --gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --gradient-bg: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg-primary: #0f0f1a;
+      --bg-card: rgba(30, 30, 45, 0.85);
+      --bg-sidebar: rgba(20, 20, 35, 0.85);
+      --text-primary: #e8e8f0;
+      --text-secondary: #a0a0b8;
+      --text-muted: #6b6b80;
+      --border: rgba(167, 139, 250, 0.25);
+      --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+      --shadow-hover: 0 12px 48px rgba(124, 58, 237, 0.35);
+      --gradient-bg: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    }
+  }
+
+  [data-theme="dark"] {
+    --bg-primary: #0f0f1a;
+    --bg-card: rgba(30, 30, 45, 0.85);
+    --bg-sidebar: rgba(20, 20, 35, 0.85);
+    --text-primary: #e8e8f0;
+    --text-secondary: #a0a0b8;
+    --text-muted: #6b6b80;
+    --border: rgba(167, 139, 250, 0.25);
+    --shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    --shadow-hover: 0 12px 48px rgba(124, 58, 237, 0.35);
+    --gradient-bg: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'WenQuanYi Micro Hei', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji';
+    background: var(--gradient-bg);
+    color: var(--text-primary);
+    min-height: 100vh;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* 侧边栏 */
+  .sidebar {
+    width: 180px;
+    min-width: 180px;
+    background: var(--bg-sidebar);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-right: 1px solid var(--border);
+    padding: 16px 0;
+    height: 100vh;
+    overflow-y: auto;
+    z-index: 10;
+    flex-shrink: 0;
+  }
+
+  .logo {
+    padding: 0 16px 16px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 8px;
+  }
+
+  .logo-title {
+    font-size: 16px;
+    font-weight: 700;
+    background: var(--gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .logo-sub {
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-top: 2px;
+    letter-spacing: 1px;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    padding: 8px 16px;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-left: 3px solid transparent;
+    transition: all 0.2s;
+    font-size: 13px;
+  }
+
+  .nav-item:hover {
+    background: rgba(124, 58, 237, 0.08);
+    color: var(--text-primary);
+  }
+
+  .nav-item.active {
+    background: linear-gradient(90deg, rgba(124, 58, 237, 0.15), transparent);
+    color: var(--accent);
+    border-left-color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* 主区容器 */
+  #mainPage {
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* 主区 */
+  .main {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 20px 24px;
+    overflow-y: auto;
+    box-sizing: border-box;
+    min-height: 0;
+  }
+
+  .header {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .header-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+
+  .process-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--bg-card);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    font-size: 13px;
+  }
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
+  }
+
+  .status-dot.stopped { background: var(--danger); box-shadow: 0 0 8px var(--danger); }
+
+  /* SSE 连接状态指示 */
+  .sse-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: var(--bg-card);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    font-size: 13px;
+  }
+
+  .sse-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+  }
+
+  .sse-dot.connected {
+    background: var(--success);
+    box-shadow: 0 0 8px var(--success);
+  }
+
+  .sse-dot.disconnected {
+    background: var(--danger);
+    box-shadow: 0 0 8px var(--danger);
+    animation: pulse 1.5s infinite;
+  }
+
+  .sse-dot.connecting {
+    background: var(--warning, #f0ad4e);
+    box-shadow: 0 0 8px var(--warning, #f0ad4e);
+    animation: pulse 1s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* 卡片 */
+  .card {
+    background: var(--bg-card);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    padding: 16px 20px;
+    margin-bottom: 14px;
+    transition: box-shadow 0.3s;
+  }
+
+  .card:hover {
+    box-shadow: var(--shadow-hover);
+  }
+
+  .card-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* 统计卡片 */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 16px;
+    margin-bottom: 16px;
+  }
+
+  .stat-card {
+    background: var(--bg-card);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow);
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--gradient);
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .stat-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--text-primary);
+    margin: 4px 0;
+  }
+
+  .stat-sub {
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+
+  /* 表单 */
+  .form-group { margin-bottom: 12px; }
+
+  .form-label {
+    display: block;
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+    font-weight: 500;
+  }
+
+  .form-input, .form-select, .form-textarea {
+    width: 100%;
+    padding: 7px 10px;
+    background: var(--bg-primary);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-primary);
+    font-size: 13px;
+    font-family: inherit;
+    transition: all 0.2s;
+  }
+
+  .form-input:focus, .form-select:focus, .form-textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.1);
+  }
+
+  .form-textarea { resize: vertical; min-height: 80px; font-family: 'Menlo', 'Monaco', monospace; }
+
+  /* 按钮 */
+  .btn {
+    padding: 7px 14px;
+    background: var(--gradient);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .btn:hover { transform: translateY(-1px); box-shadow: var(--shadow-hover); }
+  .btn:active { transform: translateY(0); }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-secondary {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+  }
+
+  .btn-danger { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+  .btn-success { background: linear-gradient(135deg, #10b981 0%, #059669 100%); }
+  .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+  /* 表格 */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  th {
+    text-align: left;
+    padding: 8px 10px;
+    background: var(--bg-primary);
+    color: var(--text-secondary);
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-primary);
+  }
+
+  tr:hover td { background: rgba(124, 58, 237, 0.04); }
+
+  /* Tag */
+  .tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 6px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .tag-success { background: rgba(16, 185, 129, 0.15); color: var(--success); }
+  .tag-warning { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
+  .tag-danger { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+  .tag-info { background: rgba(124, 58, 237, 0.15); color: var(--accent); }
+
+  /* 日志 */
+  .log-box {
+    background: #0a0a14;
+    color: #e8e8f0;
+    padding: 16px;
+    border-radius: 12px;
+    font-family: 'Menlo', 'Monaco', 'Consolas', monospace;
+    font-size: 12px;
+    line-height: 1.6;
+    max-height: 500px;
+    overflow-y: auto;
+  }
+  .log-line { white-space: pre-wrap; word-break: break-all; }
+  .log-INFO { color: #6ee7b7; }
+  .log-WARNING { color: #fcd34d; }
+  .log-ERROR { color: #fca5a5; }
+
+  /* Toast */
+  .toast-container {
+    position: fixed;
+    top: 24px;
+    right: 24px;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .toast {
+    background: var(--bg-card);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 20px;
+    box-shadow: var(--shadow);
+    min-width: 240px;
+    animation: slideIn 0.3s ease;
+  }
+
+  @keyframes slideIn {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+
+  /* 登录页 */
+  .login-page {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--gradient-bg);
+    padding: 20px;
+  }
+
+  .login-card {
+    background: var(--bg-card);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 24px;
+    border: 1px solid var(--border);
+    box-shadow: 0 20px 80px rgba(124, 58, 237, 0.2);
+    padding: 40px;
+    width: 100%;
+    max-width: 400px;
+  }
+
+  .login-title {
+    font-size: 28px;
+    font-weight: 700;
+    background: var(--gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 8px;
+  }
+
+  .login-sub { color: var(--text-secondary); margin-bottom: 32px; font-size: 14px; }
+
+  /* Tab 页 */
+  .tab-page { display: none; opacity: 0; transition: opacity 0.2s ease-in; }
+  .tab-page.active { display: block; opacity: 1; }
+
+  /* 进度条 */
+  .progress {
+    width: 100%;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .progress-bar {
+    height: 100%;
+    background: var(--gradient);
+    transition: width 0.3s;
+  }
+
+  /* 响应式 */
+  .mobile-menu-btn {
+    display: none;
+    position: fixed;
+    top: 12px; left: 12px;
+    z-index: 20;
+    background: var(--gradient);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 12px rgba(124, 58, 237, 0.3);
+  }
+
+  @media (max-width: 768px) {
+    .mobile-menu-btn { display: block; }
+    #mainPage { overflow: visible; }
+    .sidebar { position: fixed; left: 0; top: 0; transform: translateX(-100%); transition: transform 0.3s; z-index: 100; width: 200px; }
+    .sidebar.open { transform: translateX(0); }
+    .sidebar.open ~ .sidebar-overlay { display: block; }
+    .sidebar .logo { display: flex; align-items: center; }
+    .sidebar .sidebar-close { display: block; }
+    .main { padding: 12px; padding-top: 48px; }
+    .grid-2 { grid-template-columns: 1fr !important; }
+    .grid-3 { grid-template-columns: 1fr !important; }
+    .sub-tabs { flex-wrap: wrap; gap: 2px; }
+    .sub-tab-btn { padding: 8px 10px; font-size: 11px; }
+    .card { padding: 12px 14px; margin-bottom: 10px; }
+    .card-title { font-size: 14px; }
+    .btn { padding: 8px 14px; font-size: 12px; }
+    .form-input { padding: 8px 10px; font-size: 13px; }
+    .flex { flex-wrap: wrap; }
+    .header-actions { justify-content: flex-end; gap: 8px; }
+    textarea.form-input { font-size: 12px !important; }
+    /* 总览页手机端优化 */
+    .stats-grid { grid-template-columns: 1fr 1fr !important; gap: 8px !important; }
+    .stats-grid .stat-card { padding: 10px 12px !important; }
+    .stats-grid .stat-label { font-size: 12px !important; }
+    .stats-grid .stat-value { font-size: 20px !important; margin: 2px 0 !important; }
+    .stats-grid .stat-sub { font-size: 11px !important; }
+    #tab-overview .card { padding: 10px 12px !important; }
+    #tab-overview .card-title { font-size: 13px !important; }
+    #sunset-card #sunset-info { font-size: 13px !important; }
+    /* 手机端图表高度适配 */
+    #tab-overview .grid-2 .card > div[style*="height"] { height: 200px !important; }
+  }
+  .sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.3); z-index: 99; }
+  .sidebar-overlay:active { opacity: 0.8; }
+
+  /* 工具类 */
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+  @media (max-width: 768px) { .form-grid-2 { grid-template-columns: 1fr; } }
+  .mt-1 { margin-top: 8px; } .mt-2 { margin-top: 16px; } .mt-3 { margin-top: 24px; }
+  .mb-1 { margin-bottom: 8px; } .mb-2 { margin-bottom: 16px; }
+  .flex { display: flex; }
+  .flex-between { display: flex; justify-content: space-between; align-items: center; }
+  .gap-1 { gap: 8px; } .gap-2 { gap: 16px; }
+  .text-center { text-align: center; }
+  .text-muted { color: var(--text-muted); font-size: 12px; }
+  .hidden { display: none !important; }
+
+  /* 子标签页（凭证页内部） */
+  .sub-tabs {
+    display: flex;
+    gap: 4px;
+    background: var(--bg-card);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    padding: 4px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow);
+  }
+  .sub-tab-btn {
+    flex: 1;
+    padding: 10px 16px;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .sub-tab-btn:hover { background: rgba(124, 58, 237, 0.08); color: var(--text-primary); }
+  .sub-tab-btn.active {
+    background: var(--gradient);
+    color: white;
+    box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
+  }
+  .sub-tab-page { display: none; opacity: 0; transition: opacity 0.15s ease-in; }
+  .sub-tab-page.active { display: block; opacity: 1; }
+
+  /* 地图 */
+  #location-map { height: 360px; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 16px; z-index: 1; }
+
+  
+  /* 骨架屏 */
+  .skeleton {
+    background: linear-gradient(90deg, var(--border) 25%, rgba(124, 58, 237, 0.08) 50%, var(--border) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-loading 1.5s infinite;
+    border-radius: 6px;
+  }
+  .skeleton-text { height: 14px; margin-bottom: 8px; }
+  .skeleton-title { height: 20px; width: 60%; margin-bottom: 12px; }
+  .skeleton-button { height: 36px; width: 100px; }
+  @keyframes skeleton-loading {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+
+  /* 侧边栏图标动画 */
+  .nav-icon {
+    margin-right: 8px;
+    font-size: 16px;
+    transition: transform 0.2s ease;
+  }
+  .nav-item:hover .nav-icon {
+    transform: scale(1.15);
+  }
+
+  /* 按钮风格统一 */
+  .btn-primary-gradient {
+    background: var(--gradient);
+    color: white;
+    border: none;
+    box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
+  }
+  .btn-primary-gradient:hover {
+    box-shadow: 0 4px 16px rgba(124, 58, 237, 0.4);
+    transform: translateY(-1px);
+  }
+  .btn-outline {
+    background: transparent;
+    border: 1px solid var(--accent);
+    color: var(--accent);
+  }
+  .btn-outline:hover {
+    background: rgba(124, 58, 237, 0.08);
+  }
+</style>
+</head>
+<body>
+
+<!-- 登录页 -->
+<div id="loginPage" class="login-page">
+  <div class="login-card">
+    <div class="login-title">晚霞推送</div>
+    <div class="login-sub" id="loginSub">首次使用，请设置登录密码</div>
+    <form id="loginForm" onsubmit="return handleLogin(event)">
+      <div class="form-group">
+        <label class="form-label">密码 (至少 6 位)</label>
+        <input type="password" id="password" class="form-input" minlength="6" required>
+      </div>
+      <button type="submit" class="btn" style="width: 100%; justify-content: center;" id="loginBtn">设置密码</button>
+    </form>
+    <div id="loginMsg" class="mt-2" style="color: var(--danger); font-size: 13px;"></div>
+  </div>
+</div>
+
+<!-- 主界面 -->
+<div id="mainPage" class="hidden">
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-title">🌅 晚霞推送</div>
+      <button class="sidebar-close" onclick="document.querySelector('.sidebar').classList.remove('open')" style="display:none;margin-left:auto;background:none;border:none;font-size:18px;cursor:pointer;color:var(--text-secondary);padding:0 4px;">✕</button>
+    </div>
+    <div class="nav-item active" data-tab="overview"><span class="nav-icon">📊</span>总览</div>
+    <div class="nav-item" data-tab="credentials"><span class="nav-icon">🔑</span>凭证</div>
+    <div class="nav-item" data-tab="locations"><span class="nav-icon">📍</span>地点</div>
+    
+    <div class="nav-item" data-tab="score"><span class="nav-icon">⚙️</span>评分</div>
+    <div class="nav-item" data-tab="logs"><span class="nav-icon">📃</span>日志</div>
+    <div class="nav-item" data-tab="upgrade"><span class="nav-icon">⬆️</span>升级</div>
+    <div class="nav-item" data-tab="process"><span class="nav-icon">⚡</span>进程</div>
+    <div class="nav-item" data-tab="logout" onclick="logout()" style="margin-top: 24px; color: var(--danger);"><span class="nav-icon">🚪</span>登出</div>
+  </aside>
+  <div class="sidebar-overlay" onclick="document.querySelector('.sidebar').classList.remove('open')"></div>
+
+  <main class="main">
+    <button class="mobile-menu-btn" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰ 菜单</button>
+    <div class="header">
+      <div class="header-actions">
+        <button class="btn btn-secondary" onclick="toggleTheme()" title="切换暗色/亮色模式" id="themeToggle" style="padding: 6px 10px; font-size: 16px; min-width: auto;">🌙</button>
+        <div class="process-status">
+          <div class="status-dot" id="statusDot"></div>
+          <span id="statusText">运行中</span>
+        </div>
+        <div class="sse-status" id="sse-status" title="正在连接...">
+          <div class="sse-dot connecting"></div>
+          <span id="sseText" style="font-size: 13px;">连接中</span>
+        </div>
+        <button class="btn btn-secondary" onclick="restartBot()" title="重启服务">🔄 重启</button>
+      </div>
+    </div>
+
+    <!-- 总览 -->
+    <div id="tab-overview" class="tab-page active">
+      <div class="stats-grid" style="gap: 8px; margin-bottom: 8px;">
+        <div class="stat-card" style="padding: 8px 10px;">
+          <div class="stat-label" style="font-size: 10px;">启用的地点</div>
+          <div class="stat-value" style="font-size: 18px; margin: 1px 0;" id="statLocations">0</div>
+          <div class="stat-sub" style="font-size: 10px;">推送目标</div>
+        </div>
+        <div class="stat-card" style="padding: 8px 10px;">
+          <div class="stat-label" style="font-size: 10px;">本月推送</div>
+          <div class="stat-value" style="font-size: 18px; margin: 1px 0;" id="statMonthPush">0</div>
+          <div class="stat-sub" style="font-size: 10px;">次成功</div>
+        </div>
+        <div class="stat-card" style="padding: 8px 10px;">
+          <div class="stat-label" style="font-size: 10px;">平均评分</div>
+          <div class="stat-value" style="font-size: 18px; margin: 1px 0;" id="statAvgScore">-</div>
+          <div class="stat-sub" style="font-size: 10px;">本月</div>
+        </div>
+        <div class="stat-card" style="padding: 8px 10px;">
+          <div class="stat-label" style="font-size: 10px;">历史版本</div>
+          <div class="stat-value" style="font-size: 18px; margin: 1px 0;" id="statVersions">0</div>
+          <div class="stat-sub" style="font-size: 10px;">可回滚</div>
+        </div>
+      </div>
+      <!-- 今日日落信息 -->
+      <div class="card" id="sunset-card" style="padding: 8px 14px; margin-bottom: 8px;">
+        <div class="card-title" style="margin-bottom: 4px; font-size: 13px;">🌅 今日日落调度</div>
+        <div id="sunset-info" class="text-muted" style="font-size: 12px;">加载中...</div>
+      </div>
+      <!-- 评分雷达图 + 趋势图 -->
+      <div class="grid-2" style="gap: 8px;">
+        <div class="card" style="padding: 8px 10px; margin-bottom: 0;">
+          <div class="card-title" style="margin-bottom: 2px; font-size: 12px;">🎯 评分因子雷达</div>
+          <div style="position:relative;height:240px;"><canvas id="radar-chart"></canvas></div>
+          <div id="radar-empty" class="text-muted" style="text-align:center;padding:10px;display:none;font-size:12px;">暂无评分数据</div>
+        </div>
+        <div class="card" style="padding: 8px 10px; margin-bottom: 0;">
+          <div class="card-title" style="margin-bottom: 2px; font-size: 12px;">📈 近 7 日评分趋势</div>
+          <div style="position:relative;height:240px;"><canvas id="trend-chart"></canvas></div>
+          <div id="trend-empty" class="text-muted" style="text-align:center;padding:10px;display:none;font-size:12px;">暂无趋势数据</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 凭证 -->
+    <div id="tab-credentials" class="tab-page">
+      <!-- 子标签导航 -->
+      <div class="sub-tabs">
+        <button class="sub-tab-btn active" onclick="switchSubTab('weather-api')">🌐 天气 API</button>
+        <button class="sub-tab-btn" onclick="switchSubTab('push-channels')">📤 推送通道</button>
+        <button class="sub-tab-btn" onclick="switchSubTab('push-template')">📝 推送文案</button>
+        <button class="sub-tab-btn" onclick="switchSubTab('schedule-settings')">⏰ 调度设置</button>
+      </div>
+
+      <!-- 子标签1: 天气 API -->
+      <div id="subtab-weather-api" class="sub-tab-page active">
+        <div class="card">
+          <div class="card-title">🌐 天气数据平台
+            <span class="tag tag-info" id="current-provider-tag" style="margin-left: auto;">加载中</span>
+          </div>
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;">
+            <label class="sub-tab-btn" style="flex: 0 0 auto; padding: 8px 16px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+              <input type="radio" name="weather-provider" value="caiyun" onchange="saveWeatherProvider()"> 彩云天气
+            </label>
+            <label class="sub-tab-btn" style="flex: 0 0 auto; padding: 8px 16px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+              <input type="radio" name="weather-provider" value="qweather" onchange="saveWeatherProvider()"> 和风天气
+            </label>
+            <label class="sub-tab-btn" style="flex: 0 0 auto; padding: 8px 16px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+              <input type="radio" name="weather-provider" value="tomorrowio" onchange="saveWeatherProvider()"> Tomorrow.io
+            </label>
+            <label class="sub-tab-btn" style="flex: 0 0 auto; padding: 8px 16px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+              <input type="radio" name="weather-provider" value="openweathermap" onchange="saveWeatherProvider()"> OpenWeatherMap
+            </label>
+            <label class="sub-tab-btn" style="flex: 0 0 auto; padding: 8px 16px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+              <input type="radio" name="weather-provider" value="weatherapi" onchange="saveWeatherProvider()"> WeatherAPI.com
+            </label>
+            <label class="sub-tab-btn" style="flex: 0 0 auto; padding: 8px 16px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+              <input type="radio" name="weather-provider" value="visualcrossing" onchange="saveWeatherProvider()"> Visual Crossing ⭐
+            </label>
+            <label class="sub-tab-btn" style="flex: 0 0 auto; padding: 8px 16px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+              <input type="radio" name="weather-provider" value="openmeteo" onchange="saveWeatherProvider()"> Open-Meteo 🆓
+            </label>
+            <label class="sub-tab-btn" style="flex: 0 0 auto; padding: 8px 16px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+              <input type="radio" name="weather-provider" value="windy" onchange="saveWeatherProvider()"> Windy
+            </label>
+          </div>
+          <div id="provider-msg" class="mt-1 text-muted" style="font-size: 12px;"></div>
+          <!-- Token 配置（合并到平台卡片内） -->
+          <div id="weather-token-fields" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+            <!-- 动态渲染当前平台 token -->
+          </div>
+          <!-- 交叉验证（合并到平台卡片内） -->
+          <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
+            <div class="flex gap-1" style="align-items: center;">
+              <label class="switch" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+                <input type="checkbox" id="cross-validation-toggle" onchange="saveCrossValidation(this.checked)">
+                <span>🔀 多源交叉验证</span>
+              </label>
+              <span class="text-muted" style="font-size:11px;margin-left:8px;">傍晚同时拉取两个 API 取均值（需≥2个 Token）</span>
+            </div>
+            <div id="cross-validation-status" class="mt-1 text-muted" style="font-size:12px;"></div>
+          </div>
+        </div>
+        <!-- 天气数据缓存 -->
+        <div class="card">
+          <div class="card-title">
+            💾 天气数据缓存
+            <button class="btn btn-sm btn-success" style="margin-left: auto;" onclick="refreshWeatherCache()">🔄 手动拉取 API</button>
+            <button class="btn btn-sm btn-danger" onclick="clearWeatherCache()">🗑️ 清除缓存</button>
+          </div>
+          <div id="cache-info" class="text-muted">加载中...</div>
+        </div>
+        <div class="card">
+          <div class="card-title">🤖 AI 视觉服务</div>
+          <p class="text-muted mb-2" style="font-size: 12px;">用于晚霞照片 AI 分析校准，选择服务商并填入对应 API Key</p>
+          <!-- AI 服务商选择器 -->
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;">
+            <label class="sub-tab-btn" style="flex: 0 0 auto; padding: 8px 16px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+              <input type="radio" name="ai-provider" value="gemini" onchange="switchAiProvider()"> Google Gemini
+              <span class="tag tag-info" style="margin-left: 2px; font-size: 10px;">需代理</span>
+            </label>
+            <label class="sub-tab-btn" style="flex: 0 0 auto; padding: 8px 16px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+              <input type="radio" name="ai-provider" value="zhipu" onchange="switchAiProvider()"> 智谱AI
+              <span class="tag tag-info" style="margin-left: 2px; font-size: 10px;">国内直连</span>
+            </label>
+          </div>
+          <!-- AI Key 字段（只显示选中的） -->
+          <div id="ai-key-fields">
+            <div class="form-group ai-key-field" data-provider="gemini">
+              <label class="form-label">Google Gemini API Key
+                <span id="cred-status-gemini_key" class="tag" style="margin-left: 8px;"></span>
+              </label>
+              <div class="flex gap-1">
+                <input type="text" id="cred-gemini_key" class="form-input" placeholder="从 https://aistudio.google.com/apikey 获取" style="flex: 1;">
+                <button class="btn btn-sm btn-danger" onclick="clearCredential('gemini_key')" title="清除">🗑️</button>
+                <button class="btn btn-sm" onclick="saveCredential('gemini_key')">💾</button>
+              </div>
+            </div>
+            <div class="form-group ai-key-field" data-provider="zhipu" style="display:none;">
+              <label class="form-label">智谱AI API Key
+                <span id="cred-status-zhipu_key" class="tag" style="margin-left: 8px;"></span>
+              </label>
+              <div class="flex gap-1">
+                <input type="text" id="cred-zhipu_key" class="form-input" placeholder="从 https://open.bigmodel.cn 获取" style="flex: 1;">
+                <button class="btn btn-sm btn-danger" onclick="clearCredential('zhipu_key')" title="清除">🗑️</button>
+                <button class="btn btn-sm" onclick="saveCredential('zhipu_key')">💾</button>
+              </div>
+            </div>
+          </div>
+          <!-- HTTPS 代理（仅 Gemini 时显示） -->
+          <div id="ai-proxy-section" class="form-group" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+            <label class="form-label">🌐 HTTPS 代理
+              <span class="text-muted" style="font-size: 11px; margin-left: 8px;">留空则直连</span>
+            </label>
+            <div class="flex gap-1">
+              <input type="text" id="proxy-url" class="form-input" placeholder="例: http://192.168.1.100:7890" style="flex: 1;">
+              <button class="btn btn-sm" onclick="saveProxy()">💾</button>
+            </div>
+            <p class="text-muted mt-1" style="font-size: 11px;">Clash 默认端口通常为 7890，需开启「允许局域网连接」</p>
+            <div id="proxy-msg" class="mt-1"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 子标签2: 推送通道 -->
+      <div id="subtab-push-channels" class="sub-tab-page">
+        <div class="card">
+          <div class="card-title">💬 推送通道配置</div>
+          <p class="text-muted mb-2" style="font-size: 12px;">选择要配置的推送通道，消息将发送到所有已启用的通道（企业微信支持多行 URL 实现多人推送）</p>
+          <!-- 通道选择器 -->
+          <div style="display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px;">
+            <label class="sub-tab-btn" style="flex: 0 0 auto; padding: 8px 16px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+              <input type="radio" name="push-channel" value="wechat_webhook" onchange="switchPushChannel()" checked> 企业微信
+            </label>
+            <label class="sub-tab-btn" style="flex: 0 0 auto; padding: 8px 16px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+              <input type="radio" name="push-channel" value="dingtalk_webhook" onchange="switchPushChannel()"> 钉钉
+            </label>
+            <label class="sub-tab-btn" style="flex: 0 0 auto; padding: 8px 16px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+              <input type="radio" name="push-channel" value="feishu_webhook" onchange="switchPushChannel()"> 飞书
+            </label>
+            <label class="sub-tab-btn" style="flex: 0 0 auto; padding: 8px 16px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+              <input type="radio" name="push-channel" value="serverchan_sendkey" onchange="switchPushChannel()"> Server酱
+            </label>
+            <label class="sub-tab-btn" style="flex: 0 0 auto; padding: 8px 16px; font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 4px;">
+              <input type="radio" name="push-channel" value="pushplus_token" onchange="switchPushChannel()"> PushPlus
+            </label>
+          </div>
+          <!-- 各通道配置（只显示选中的） -->
+          <div id="push-channel-fields">
+            <div class="form-group push-channel-field" data-channel="wechat_webhook">
+              <label class="form-label">企业微信 Webhook
+                <span id="cred-status-wechat_webhook" class="tag" style="margin-left: 8px;"></span>
+              </label>
+              <div class="flex gap-1">
+                <textarea id="cred-wechat_webhook" class="form-input" rows="2" placeholder="每行一个 Webhook URL，支持多人推送&#10;https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=..." style="flex: 1; font-size: 12px; font-family: monospace;"></textarea>
+                <div style="display: flex; flex-direction: column; gap: 4px; align-self: flex-start;">
+                  <button class="btn btn-sm btn-danger" onclick="clearCredential('wechat_webhook')" title="清除">🗑️</button>
+                  <button class="btn btn-sm btn-primary" onclick="saveSingleChannel('wechat_webhook')">💾</button>
+                </div>
+              </div>
+            </div>
+            <div class="form-group push-channel-field" data-channel="dingtalk_webhook" style="display:none;">
+              <label class="form-label">钉钉 Webhook
+                <span id="cred-status-dingtalk_webhook" class="tag" style="margin-left: 8px;"></span>
+              </label>
+              <div class="flex gap-1">
+                <input type="text" id="cred-dingtalk_webhook" class="form-input" placeholder="https://oapi.dingtalk.com/robot/send?access_token=..." style="flex: 1;">
+                <button class="btn btn-sm btn-danger" onclick="clearCredential('dingtalk_webhook')" title="清除">🗑️</button>
+                <button class="btn btn-sm btn-primary" onclick="saveSingleChannel('dingtalk_webhook')">💾</button>
+              </div>
+            </div>
+            <div class="form-group push-channel-field" data-channel="feishu_webhook" style="display:none;">
+              <label class="form-label">飞书 Webhook
+                <span id="cred-status-feishu_webhook" class="tag" style="margin-left: 8px;"></span>
+              </label>
+              <div class="flex gap-1">
+                <input type="text" id="cred-feishu_webhook" class="form-input" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..." style="flex: 1;">
+                <button class="btn btn-sm btn-danger" onclick="clearCredential('feishu_webhook')" title="清除">🗑️</button>
+                <button class="btn btn-sm btn-primary" onclick="saveSingleChannel('feishu_webhook')">💾</button>
+              </div>
+            </div>
+            <div class="form-group push-channel-field" data-channel="serverchan_sendkey" style="display:none;">
+              <label class="form-label">Server酱 SendKey（微信推送）
+                <span id="cred-status-serverchan_sendkey" class="tag" style="margin-left: 8px;"></span>
+              </label>
+              <div class="flex gap-1">
+                <input type="text" id="cred-serverchan_sendkey" class="form-input" placeholder="从 https://sct.ftqq.com 获取" style="flex: 1;">
+                <button class="btn btn-sm btn-danger" onclick="clearCredential('serverchan_sendkey')" title="清除">🗑️</button>
+                <button class="btn btn-sm btn-primary" onclick="saveSingleChannel('serverchan_sendkey')">💾</button>
+              </div>
+            </div>
+            <div class="form-group push-channel-field" data-channel="pushplus_token" style="display:none;">
+              <label class="form-label">PushPlus Token（微信推送）
+                <span id="cred-status-pushplus_token" class="tag" style="margin-left: 8px;"></span>
+              </label>
+              <div class="flex gap-1">
+                <input type="text" id="cred-pushplus_token" class="form-input" placeholder="从 https://www.pushplus.plus 获取" style="flex: 1;">
+                <button class="btn btn-sm btn-danger" onclick="clearCredential('pushplus_token')" title="清除">🗑️</button>
+                <button class="btn btn-sm btn-primary" onclick="saveSingleChannel('pushplus_token')">💾</button>
+              </div>
+            </div>
+          </div>
+          <div class="form-group" style="margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--border);">
+            <label class="form-label">🎨 富文本模式（企微 Markdown / 飞书卡片）</label>
+            <div class="flex gap-1" style="align-items: center;">
+              <label class="switch" style="display:inline-flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+                <input type="checkbox" id="rich-text-toggle" onchange="saveRichTextMode(this.checked)">
+                <span>启用富文本推送</span>
+              </label>
+              <span class="text-muted" style="font-size:11px;margin-left:8px;">企业微信使用 Markdown 格式，飞书使用富文本卡片</span>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">🔔 推送测试</div>
+          <div class="form-group">
+            <label class="form-label">选择推送地点</label>
+            <select id="push-loc-select" class="form-select"></select>
+          </div>
+          <div class="flex gap-2" style="flex-wrap: wrap;">
+            <button class="btn" onclick="saveAllPushChannels()">💾 保存所有通道</button>
+            <button class="btn btn-secondary" onclick="doWebhookPrecheck()">🔍 Webhook预检</button>
+            <button class="btn btn-success" onclick="doAllInOneTest()">🔔 推送测试</button>
+          </div>
+          <div id="test-push-result" class="mt-2"></div>
+          <p class="text-muted mt-1">💡 点击「推送测试」将发送测试消息、展示天气评分预览，并可选择是否强制推送晚霞文案</p>
+        </div>
+        <div class="card">
+          <div class="card-title">📦 配置备份</div>
+          <div class="flex gap-2">
+            <button class="btn" onclick="exportConfig()">📤 导出配置</button>
+            <label class="btn btn-secondary" style="cursor: pointer;">📥 导入配置
+              <input type="file" accept=".json" onchange="importConfig(event)" style="display: none;">
+            </label>
+          </div>
+          <div id="config-backup-result" class="mt-2 text-muted"></div>
+        </div>
+      </div>
+
+      <!-- 子标签3: 推送文案 -->
+      <div id="subtab-push-template" class="sub-tab-page">
+        <div class="card">
+          <div class="card-title">📝 推送文案编辑器</div>
+          <p class="text-muted mb-2" style="font-size: 12px;">自定义推送消息模板（傍晚晚霞 + 早间播报两套），使用变量占位符填充实时数据</p>
+          <div class="form-group">
+            <label class="form-label">可用变量 <span class="tag tag-info" style="margin-left: 8px;">点击插入</span></label>
+            <div id="template-variables" style="display: flex; flex-wrap: wrap; gap: 4px;"></div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">🌅 傍晚晚霞模板</label>
+            <textarea id="push-template-editor" class="form-input" rows="12" style="font-size: 12px; font-family: monospace; line-height: 1.5;"></textarea>
+          </div>
+          <div class="form-group">
+            <label class="form-label">☀️ 早间播报模板</label>
+            <textarea id="morning-template-editor" class="form-input" rows="14" style="font-size: 12px; font-family: monospace; line-height: 1.5;"></textarea>
+          </div>
+          <div class="flex gap-2">
+            <button class="btn" onclick="savePushTemplate()">💾 保存模板</button>
+            <button class="btn btn-secondary" onclick="resetPushTemplate()">🔄 恢复默认</button>
+            <button class="btn btn-success" onclick="previewPushTemplate()">👁️ 预览傍晚</button>
+            <button class="btn btn-success" onclick="previewMorningTemplate()">👁️ 预览早间</button>
+          </div>
+          <div id="push-template-msg" class="mt-2"></div>
+          <div id="push-template-preview" class="mt-2" style="display: none;">
+            <div class="card" style="background: rgba(124, 58, 237, 0.06); border: 1px solid rgba(124, 58, 237, 0.15);">
+              <div class="card-title" style="font-size: 13px;">📱 推送预览</div>
+              <pre id="preview-text" style="font-size: 12px; line-height: 1.5; white-space: pre-wrap; color: var(--text-primary);"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 子标签4: 调度设置 -->
+      <div id="subtab-schedule-settings" class="sub-tab-page">
+        <div class="card">
+          <div class="card-title">⏰ 推送时间</div>
+          <div class="card" style="background: rgba(124, 58, 237, 0.08); border: 1px solid rgba(124, 58, 237, 0.2); margin-bottom: 16px;">
+            <div class="card-title" style="font-size: 14px;">📌 系统自动推送时间（固定）</div>
+            <div style="font-size: 13px;">
+              <div class="flex gap-2 mb-1">
+                <span class="tag tag-info" style="padding: 6px 12px;">🌅 08:00</span>
+                <span class="text-muted">早上拉取 API 数据 + 计算日落时间</span>
+              </div>
+              <div class="flex gap-2">
+                <span class="tag tag-info" style="padding: 6px 12px;" id="sunset-offset-display">🌇 日落前50分钟</span>
+                <span class="text-muted">自动推送晚霞（时间根据季节自动计算）</span>
+              </div>
+            </div>
+          </div>
+          <div class="card-title" style="font-size: 14px;">🔧 额外自定义推送时间</div>
+          <p class="text-muted mb-2" style="font-size: 12px;">选择时间后点保存即可添加，保存后自动重启生效</p>
+          <div id="schedule-times-list" class="mb-2"></div>
+          <div class="flex gap-1 mb-2">
+            <input type="time" id="new-schedule-time" class="form-input" style="width: 150px;">
+            <button class="btn" onclick="saveSchedule()">💾 保存并添加</button>
+          </div>
+          <div id="schedule-msg" class="mt-2 text-muted"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">🌇 日落推送偏移</div>
+          <p class="text-muted mb-2" style="font-size: 12px;">设置在日落前多少分钟推送晚霞预报（默认50分钟）</p>
+          <div class="flex gap-1">
+            <div class="form-group" style="flex: 0 0 120px;">
+              <input type="number" id="sunset-offset" class="form-input" min="10" max="120" value="50">
+            </div>
+            <div style="display: flex; align-items: center; color: var(--text-secondary); font-size: 13px;">分钟前推送</div>
+          </div>
+          <button class="btn" onclick="saveSunsetOffset()">💾 保存偏移量</button>
+          <div id="sunset-offset-msg" class="mt-2 text-muted"></div>
+        </div>
+        <!-- 日落推送模式：自动/手动切换 -->
+        <div class="card">
+          <div class="card-title">🌇 日落推送模式</div>
+          <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <button class="btn btn-primary" id="sunset-mode-auto-btn" onclick="setSunsetMode('auto')" style="flex: 1;">🤖 自动计算</button>
+            <button class="btn" id="sunset-mode-manual-btn" onclick="setSunsetMode('manual')" style="flex: 1;">🧪 手动设置</button>
+          </div>
+          <!-- 自动模式说明 -->
+          <div id="sunset-mode-auto-desc" style="padding: 12px; background: rgba(124,58,237,0.05); border-radius: 8px; font-size: 12px;">
+            <div>✅ <b>自动模式已启用</b></div>
+            <div class="text-muted" style="margin-top: 4px;">系统每天早上 08:00 自动计算当天日落时间，并在日落前 <span id="auto-offset-display">50</span> 分钟自动推送。</div>
+          </div>
+          <!-- 手动模式设置 -->
+          <div id="sunset-mode-manual-panel" style="display: none;">
+            <div style="padding: 12px; background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.3); border-radius: 8px; font-size: 12px; margin-bottom: 12px;">
+              ⚠️ <b>手动模式</b>：设置日落时间和提前量，系统将在推送时间自动拉取数据并推送。切换回「自动计算」可恢复每日自动推算。
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;">
+              <div>
+                <label style="font-size: 12px; display: block; margin-bottom: 4px;">🌅 手动日落时间</label>
+                <input type="time" id="manual-sunset-time" class="form-input" style="width: 140px;" value="">
+              </div>
+              <div>
+                <label style="font-size: 12px; display: block; margin-bottom: 4px;">⏱ 提前推送（分钟）</label>
+                <input type="number" id="manual-sunset-offset" class="form-input" style="width: 100px;" min="10" max="120" value="50">
+              </div>
+              <div>
+                <label style="font-size: 12px; display: block; margin-bottom: 4px;">地点</label>
+                <select id="manual-sunset-loc" class="form-input" style="width: 140px;"></select>
+              </div>
+              <button class="btn btn-primary" onclick="scheduleManualSunset()" style="height: 36px;">📅 预约推送</button>
+            </div>
+            <div id="manual-sunset-result" style="margin-top: 12px;"></div>
+            <!-- 待执行的预约任务列表 -->
+            <div id="scheduled-tasks-panel" style="margin-top: 16px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 地点 -->
+    <div id="tab-locations" class="tab-page">
+      <div class="card">
+        <div class="card-title">🗺️ 地图选点 <span class="text-muted" style="font-size: 11px; font-weight: normal;">点击地图自动填充经纬度</span></div>
+        <div id="location-map"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">📍 添加地点</div>
+        <div class="grid-3">
+          <div class="form-group">
+            <label class="form-label">名称</label>
+            <input type="text" id="loc-name" class="form-input" placeholder="北京·故宫角楼">
+          </div>
+          <div class="form-group">
+            <label class="form-label">经度</label>
+            <input type="number" step="0.0001" id="loc-lng" class="form-input" placeholder="116.397">
+          </div>
+          <div class="form-group">
+            <label class="form-label">纬度</label>
+            <input type="number" step="0.0001" id="loc-lat" class="form-input" placeholder="39.916">
+          </div>
+        </div>
+        <button class="btn" id="loc-add-btn" onclick="addLocation()">➕ 添加</button>
+        <button class="btn btn-secondary" id="loc-cancel-btn" onclick="exitEditMode()" style="display: none; margin-left: 8px;">❌ 取消编辑</button>
+      </div>
+      <div class="card">
+        <div class="card-title">📋 已添加的地点</div>
+        <table>
+          <thead>
+            <tr><th>名称</th><th>经度</th><th>纬度</th><th>启用</th><th>操作</th></tr>
+          </thead>
+          <tbody id="locations-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+
+    <!-- 评分（阈值+预览合并） -->
+    <div id="tab-score" class="tab-page">
+      <div class="sub-tabs">
+        <button class="sub-tab-btn active" onclick="switchSubTab('score-thresholds')">⚙️ 阈值配置</button>
+        <button class="sub-tab-btn" onclick="switchSubTab('score-preview')">👁️ 评分预览</button>
+        <button class="sub-tab-btn" onclick="switchSubTab('score-calibration')">🎯 AI校准</button>
+        <button class="sub-tab-btn" onclick="switchSubTab('score-accuracy')">📊 准确率</button>
+      </div>
+      <div id="subtab-score-thresholds" class="sub-tab-page active">
+        <div class="card">
+          <div class="card-title">⚙️ 评分阈值</div>
+          <p class="text-muted mb-2">调整各项因子的最优区间和推荐阈值</p>
+          <div class="card" style="background: rgba(234, 179, 8, 0.1); border: 1px solid rgba(234, 179, 8, 0.3); margin-bottom: 16px;">
+            <div class="card-title" style="font-size: 14px;">💡 配置建议</div>
+            <div style="font-size: 13px; color: var(--text-secondary);">
+              <p><b>晚霞形成的理想条件：</b></p>
+              <ul style="margin: 8px 0; padding-left: 20px;">
+                <li><b>云量 30%~85%</b>：太少的云没有晚霞，太多则遮挡落日</li>
+                <li><b>湿度 20%~80%</b>：适度湿润有利于云层渲染</li>
+                <li><b>风速 &lt;6 m/s</b>：风速太大会吹散云层</li>
+                <li><b>能见度 &gt;8 km</b>：空气通透才能看到清晰晚霞</li>
+                <li><b>无降水</b>：雨天看不到晚霞</li>
+              </ul>
+              <p><b>推荐阈值：</b>65分适合大多数情况，调到50分会增加推送频率</p>
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="form-group">
+              <label class="form-label">云量最小 (%) <span class="text-muted" style="font-size: 11px;">建议: 20~40</span></label>
+              <input type="number" id="th-cloudrate_min" class="form-input" value="30">
+            </div>
+            <div class="form-group">
+              <label class="form-label">云量最大 (%) <span class="text-muted" style="font-size: 11px;">建议: 70~90</span></label>
+              <input type="number" id="th-cloudrate_max" class="form-input" value="85">
+            </div>
+            <div class="form-group">
+              <label class="form-label">湿度最小 (%) <span class="text-muted" style="font-size: 11px;">建议: 10~30</span></label>
+              <input type="number" id="th-humidity_min" class="form-input" value="20">
+            </div>
+            <div class="form-group">
+              <label class="form-label">湿度最大 (%) <span class="text-muted" style="font-size: 11px;">建议: 70~85</span></label>
+              <input type="number" id="th-humidity_max" class="form-input" value="80">
+            </div>
+            <div class="form-group">
+              <label class="form-label">最大风速 (m/s) <span class="text-muted" style="font-size: 11px;">建议: 5~8</span></label>
+              <input type="number" id="th-wind_max" class="form-input" value="6">
+            </div>
+            <div class="form-group">
+              <label class="form-label">最低能见度 (km) <span class="text-muted" style="font-size: 11px;">建议: 6~12</span></label>
+              <input type="number" id="th-visibility_min" class="form-input" value="8">
+            </div>
+            <div class="form-group">
+              <label class="form-label">推荐阈值 (分) <span class="text-muted" style="font-size: 11px;">建议: 50~70</span></label>
+              <input type="number" id="th-score_threshold" class="form-input" value="65">
+            </div>
+          </div>
+          <div class="flex gap-2" style="flex-wrap: wrap; align-items: center;">
+            <button class="btn" onclick="saveThresholds()">💾 保存</button>
+            <button class="btn btn-secondary" onclick="resetThresholds()">🔄 恢复默认</button>
+            <button class="btn btn-success" onclick="previewWithCurrentThresholds()">👁️ 预览当前阈值效果</button>
+          </div>
+          <div id="threshold-preview-result" class="mt-3"></div>
+        </div>
+      </div>
+      <div id="subtab-score-preview" class="sub-tab-page">
+        <div class="card">
+          <div class="card-title">👁️ 评分预览</div>
+          <div class="form-group">
+            <label class="form-label">选择地点</label>
+            <select id="preview-loc" class="form-select"></select>
+          </div>
+          <button class="btn" onclick="doPreview()">🔍 计算评分</button>
+          <div id="preview-result" class="mt-3"></div>
+        </div>
+      </div>
+
+      <!-- 子标签3: AI校准 -->
+      <div id="subtab-score-calibration" class="sub-tab-page">
+        <div class="card">
+          <div class="card-title">🎯 AI 晚霞校准</div>
+          <p class="text-muted mb-3">上传晚霞照片，自动读取拍摄日期，查询当天推送评分，AI分析实际效果并校准</p>
+          
+          <div class="form-group">
+            <label class="form-label">选择地点</label>
+            <select id="calibration-loc" class="form-select"></select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">晚霞照片</label>
+            <input type="file" id="calibration-photo" class="form-input" accept="image/*">
+            <p class="text-muted" style="font-size:11px;margin-top:4px;">自动读取照片拍摄日期，并查询当天推送评分</p>
+          </div>
+          <button class="btn" onclick="uploadSunsetPhoto()" id="btn-upload-photo">📤 上传并分析</button>
+          <div id="calibration-result" class="mt-3"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">📜 历史分析记录
+            <button class="btn btn-sm btn-danger" onclick="clearPhotoHistory()" style="margin-left:auto;font-size:12px;">🗑️ 清除全部</button>
+          </div>
+          <div id="photo-history-list">加载中...</div>
+        </div>
+      </div>
+
+      <!-- 子标签4: 准确率分析 -->
+      <div id="subtab-score-accuracy" class="sub-tab-page">
+        <div class="card">
+          <div class="card-title" style="display:flex;justify-content:space-between;align-items:center;">
+            <span>📊 推送准确率分析</span>
+            <button class="btn btn-secondary" onclick="cleanupPushHistory()" style="padding:4px 10px;font-size:11px;min-width:auto;">🗑️ 清理测试/手动记录</button>
+          </div>
+          <div id="accuracy-stats">加载中...</div>
+        </div>
+        <div class="card" style="padding: 10px 14px;">
+          <div class="card-title" style="font-size: 13px; margin-bottom: 4px;">📈 分数段分布（近 30 天）</div>
+          <div style="position:relative;height:240px;max-width:420px;margin:0 auto;"><canvas id="accuracy-chart"></canvas></div>
+          <div id="accuracy-empty" class="text-muted" style="text-align:center;padding:12px;display:none;font-size:12px;">暂无数据</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 日志（全部合并） -->
+    <div id="tab-logs" class="tab-page">
+      <div class="sub-tabs">
+        <button class="sub-tab-btn active" onclick="switchSubTab('logs-realtime')">📃 日志</button>
+        <button class="sub-tab-btn" onclick="switchSubTab('logs-diagnose')">🩺 诊断核验</button>
+        <button class="sub-tab-btn" onclick="switchSubTab('logs-terminal');initTermOnShow()">💻 SSH 终端</button>
+      </div>
+      <div id="subtab-logs-realtime" class="sub-tab-page active">
+        <div class="card">
+          <div class="card-title">📃 日志
+            <div style="margin-left: auto; display: flex; gap: 4px;">
+              <button class="btn btn-sm btn-primary" id="log-toggle-realtime" onclick="switchLogView('realtime')">实时日志</button>
+              <button class="btn btn-sm btn-secondary" id="log-toggle-history" onclick="switchLogView('history')">推送历史</button>
+              <button class="btn btn-sm btn-secondary" id="log-toggle-audit" onclick="switchLogView('audit')">操作日志</button>
+            </div>
+          </div>
+          <div id="log-view-realtime">
+            <div class="log-box" id="logBox"></div>
+          </div>
+          <div id="log-view-history" style="display: none;">
+            <table>
+              <thead><tr><th>时间</th><th>地点</th><th>评分</th><th>通道</th><th>结果</th><th>消息</th></tr></thead>
+              <tbody id="history-tbody"></tbody>
+            </table>
+          </div>
+          <div id="log-view-audit" style="display: none;">
+            <!-- 筛选器 -->
+            <div style="display: flex; gap: 8px; margin-bottom: 12px; flex-wrap: wrap; align-items: center;">
+              <select id="audit-filter-type" class="form-select" style="width: auto; min-width: 120px;">
+                <option value="">全部类型</option>
+                <option value="config">配置变更</option>
+                <option value="location">地点操作</option>
+                <option value="push">推送操作</option>
+                <option value="system">系统操作</option>
+              </select>
+              <select id="audit-filter-result" class="form-select" style="width: auto; min-width: 100px;">
+                <option value="">全部结果</option>
+                <option value="success">成功</option>
+                <option value="failed">失败</option>
+              </select>
+              <input type="date" id="audit-filter-date" class="form-input" style="width: auto;">
+              <button class="btn btn-sm btn-primary" onclick="filterAuditLogs()">🔍 筛选</button>
+              <button class="btn btn-sm btn-secondary" onclick="clearAuditFilters()">清除</button>
+            </div>
+            <table>
+              <thead><tr><th>时间</th><th>操作</th><th>目标</th><th>详情</th><th>结果</th></tr></thead>
+              <tbody id="audit-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div id="subtab-logs-diagnose" class="sub-tab-page">
+        <div class="card">
+          <div class="card-title">🩺 诊断核验
+            <div style="margin-left: auto; display: flex; gap: 4px;">
+              <button class="btn btn-sm btn-secondary" id="diag-toggle-health" onclick="switchDiagView('health')">服务健康</button>
+              <button class="btn btn-sm btn-primary" id="diag-toggle-diagnose" onclick="switchDiagView('diagnose')">一键诊断</button>
+              <button class="btn btn-sm btn-secondary" id="diag-toggle-verify" onclick="switchDiagView('verify')">数据核验</button>
+            </div>
+          </div>
+          <!-- 服务健康视图 -->
+          <div id="diag-view-health" style="display: none;">
+            <p class="text-muted mb-2">检查整个项目服务是否正常运行</p>
+            <button class="btn" onclick="doHealthCheck()">🔍 开始检查</button>
+            <div id="health-result" class="mt-3"></div>
+          </div>
+          <!-- 一键诊断视图 -->
+          <div id="diag-view-diagnose">
+            <p class="text-muted mb-2">测彩云 API / 推送通道 / 系统状态</p>
+            <button class="btn" onclick="doDiagnose()">▶️ 开始诊断</button>
+            <div id="diagnose-result" class="mt-3"></div>
+          </div>
+          <!-- 数据核验视图 -->
+          <div id="diag-view-verify" style="display: none;">
+            <p class="text-muted mb-2" style="font-size: 13px;">查看 API 原始数据，粘贴实际收到的推送消息进行数值对比，核验推送数据是否准确</p>
+            <div class="flex gap-2 mb-2" style="align-items: center;">
+              <select id="verify-location" class="form-select" style="width: 200px;"></select>
+              <button class="btn" onclick="loadVerifyData()">📥 加载数据</button>
+            </div>
+            <div class="card" id="verify-raw-card" style="display:none;">
+              <div class="card-title">📊 API 原始数据
+                <span id="verify-source" class="tag tag-info" style="margin-left: 8px;"></span>
+                <span id="verify-score" class="tag" style="margin-left: 4px;"></span>
+              </div>
+              <div class="flex gap-2 mb-2">
+                <div style="flex:1;">
+                  <div class="form-label">天气数据明细</div>
+                  <pre id="verify-raw-json" class="log-box" style="max-height: 350px; font-size: 12px; white-space: pre-wrap; word-break: break-all;"></pre>
+                </div>
+              </div>
+              <div class="form-label">评分明细</div>
+              <div id="verify-breakdown" style="font-size: 13px; margin-bottom: 12px;"></div>
+            </div>
+            <div class="card" id="verify-compare-card" style="display:none;">
+              <div class="card-title">📝 粘贴实际收到的推送消息</div>
+              <textarea id="verify-actual-input" class="form-input" rows="8" placeholder="将从企业微信/钉钉/飞书收到的推送消息粘贴到这里..." style="font-size: 13px;"></textarea>
+              <div class="flex gap-2 mt-2">
+                <button class="btn" onclick="doVerifyCompare()">🔍 开始对比分析</button>
+                <button class="btn btn-secondary" onclick="clearVerifyCompare()">🗑️ 清空</button>
+              </div>
+            </div>
+            <div class="card" id="verify-result-card" style="display:none;">
+              <div class="card-title">📈 对比分析结果</div>
+              <div id="verify-result-summary" class="mb-2"></div>
+              <div id="verify-result-checks"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- SSH 终端子页 -->
+      <div id="subtab-logs-terminal" class="sub-tab-page" style="display:none;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:16px;">💻</span>
+            <span style="font-weight:600;color:var(--text-primary);">SSH 终端</span>
+            <span id="term-status" style="font-size:12px;padding:2px 8px;border-radius:10px;background:var(--text-muted);color:#fff;">未连接</span>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="btn btn-secondary" onclick="toggleFileBrowser()" style="padding:4px 12px;font-size:13px;"> 文件</button>
+            <button class="btn btn-secondary" onclick="termReconnect()" style="padding:4px 12px;font-size:13px;">🔄 重连</button>
+            <button class="btn btn-secondary" onclick="termClear()" style="padding:4px 12px;font-size:13px;">🧹 清屏</button>
+          </div>
+        </div>
+        <!-- 文件浏览器面板 -->
+        <div id="file-browser-panel" style="display:none;margin-bottom:8px;">
+          <div style="background:#1a1a2e;border-radius:8px;padding:10px;max-height:40vh;overflow-y:auto;">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+              <button onclick="fbGoUp()" style="background:none;border:1px solid #444;color:#c8d6e5;border-radius:4px;padding:2px 8px;cursor:pointer;font-size:12px;">⬆️ 上级</button>
+              <span id="fb-path" style="color:#88c0d0;font-size:12px;font-family:monospace;">/</span>
+            </div>
+            <div id="fb-list"></div>
+          </div>
+        </div>
+        <div id="terminal-container" style="height:50vh;background:#000000;border-radius:8px;overflow:hidden;">
+          <div id="xterm-mount" style="width:100%;height:100%;"></div>
+        </div>
+      </div>
+    </div>
+    <div id="tab-upgrade" class="tab-page">
+      <!-- 版本更新检查 -->
+      <div class="card">
+        <div class="card-title">🔔 版本更新</div>
+        <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 12px;">
+          <div style="font-size: 13px;">
+            <span style="color: var(--text-secondary);">当前版本：</span>
+            <strong id="updateCurrentVer">-</strong>
+          </div>
+          <div style="font-size: 13px;">
+            <span style="color: var(--text-secondary);">最新版本：</span>
+            <strong id="updateLatestVer">-</strong>
+          </div>
+          <div id="updateStatusBadge" style="font-size: 12px; padding: 2px 10px; border-radius: 10px; background: var(--bg-secondary);">检查中...</div>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+          <input type="text" id="updateRepoInput" class="form-input" placeholder="owner/repo（如 sunset-bot/sunset-bot）" style="width: 280px; font-size: 13px;">
+          <button class="btn btn-secondary" onclick="checkUpdate()" id="updateCheckBtn">🔍 检查更新</button>
+          <a id="updateReleaseLink" href="#" target="_blank" style="display: none; font-size: 13px;">📋 查看 Release</a>
+        </div>
+        <div id="update-msg" class="mt-2 text-muted" style="font-size: 13px;"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">⬆️ 上传新版本</div>
+        
+        <div class="card" style="background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); margin-bottom: 16px;">
+          <div class="card-title" style="font-size: 14px;">📌 使用说明</div>
+          <div style="font-size: 13px; color: var(--text-secondary);">
+            <p><b>支持的文件（白名单）：</b></p>
+            <ul style="margin: 8px 0; padding-left: 20px;">
+              <li><code>bot.py</code> / <code>web.py</code> / <code>templates.html</code> - 核心代码</li>
+              <li><code>requirements.txt</code> / <code>migrate.py</code> - 依赖和迁移</li>
+              <li><code>install.sh</code> / <code>start.sh</code> / <code>stop.sh</code> - 脚本</li>
+              <li><code>tests/*.py</code> - 测试文件</li>
+            </ul>
+            <p><b>上传流程：</b>选择文件 → 自动备份整个项目 → 写入新文件 → 自动重启生效</p>
+            <p class="text-muted" style="font-size: 12px;">⚠️ 备份包含所有项目代码（排除 data/logs 等运行时目录）</p>
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label class="form-label">选择要上传的文件</label>
+          <input type="file" id="upgrade-files" multiple accept=".py,.html,.sh,.txt,.md,.json,.js">
+        </div>
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <button class="btn" onclick="doUpgrade()">📤 上传并升级</button>
+          <button class="btn btn-secondary" onclick="downloadDeployPackage(true)" title="含全部配置（账号/凭证/地点/阈值），不含推送记录，新服务器开箱即用">📦 完整版（含配置）</button>
+        </div>
+        <div id="upgrade-msg" class="mt-2 text-muted"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">📚 历史版本 (可回滚)</div>
+        <table>
+          <thead>
+            <tr><th>备份名</th><th>时间</th><th>大小</th><th>文件数</th><th>包含</th><th>操作</th></tr>
+          </thead>
+          <tbody id="versions-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 进程 -->
+    <div id="tab-process" class="tab-page">
+      <div class="card">
+        <div class="card-title">⚡ 进程管理</div>
+        <div id="process-info" class="mt-2">加载中...</div>
+        <div class="mt-3">
+          <button class="btn" onclick="restartBot()">🔄 重启服务</button>
+        </div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- Toast 容器 -->
+<div class="toast-container" id="toastContainer"></div>
+
+<script>
+// ==================== 工具 ====================
+function api(method, path, body) {
+  return fetch(path, {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+    credentials: 'same-origin',
+  }).then(r => r.json().then(d => ({ status: r.status, data: d })));
+}
+
+function toast(msg, type='info', duration=3500) {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = 'toast';
+  const color = type === 'error' ? 'var(--danger)' : type === 'success' ? 'var(--success)' : 'var(--accent)';
+  const closeBtn = duration === 0 ? `<span onclick="this.closest('.toast').remove()" style="margin-left:auto;cursor:pointer;font-size:16px;opacity:0.7;padding:0 2px;">✕</span>` : '';
+  t.innerHTML = `<div style="display: flex; align-items: center; gap: 8px; width:100%;">
+    <span style="width: 8px; height: 8px; border-radius: 50%; background: ${color}; flex-shrink:0;"></span>
+    <span style="flex:1;">${msg}</span>
+    ${closeBtn}
+  </div>`;
+  c.appendChild(t);
+  if (duration > 0) setTimeout(() => t.remove(), duration);
+}
+
+function fmtTime(ts) {
+  const d = new Date(ts * 1000);
+  return d.toLocaleString('zh-CN', { hour12: false });
+}
+
+// ==================== 登录 ====================
+async function checkAuth() {
+  const r = await api('GET', '/api/auth/status');
+  if (r.data.logged_in) {
+    showMain();
+  } else if (!r.data.has_user) {
+    showLogin('首次使用，请设置登录密码', true);
+  } else {
+    showLogin('请输入密码登录', false);
+  }
+}
+
+function showLogin(sub, isSetup) {
+  document.getElementById('loginPage').classList.remove('hidden');
+  document.getElementById('mainPage').classList.add('hidden');
+  document.getElementById('loginSub').textContent = sub;
+  document.getElementById('loginBtn').textContent = isSetup ? '设置密码' : '登录';
+  window._isSetup = isSetup;
+}
+
+function showMain() {
+  document.getElementById('loginPage').classList.add('hidden');
+  document.getElementById('mainPage').classList.remove('hidden');
+  initSSE();
+  // 恢复主题
+  initTheme();
+  // 确定要显示的 tab 和 sub-tab
+  const savedTab = localStorage.getItem('activeTab');
+  const savedSubTab = localStorage.getItem('activeSubTab');
+  const targetTab = (savedTab && document.getElementById('tab-' + savedTab)) ? savedTab : null;
+  // 检查保存的 sub-tab 是否属于目标 tab
+  let targetSubTab = null;
+  if (savedSubTab && targetTab) {
+    const tabPage = document.getElementById('tab-' + targetTab);
+    if (tabPage && document.getElementById('subtab-' + savedSubTab) && tabPage.querySelector('#subtab-' + savedSubTab)) {
+      targetSubTab = savedSubTab;
+    }
+  }
+  // 切换 tab（会默认激活第一个子标签并加载数据）
+  if (targetTab) {
+    switchTab(targetTab);
+  }
+  // 如果需要恢复到非第一个子标签，切换并重新加载数据
+  if (targetSubTab) {
+    const firstSubPage = document.getElementById('tab-' + targetTab)?.querySelector('.sub-tab-page');
+    const firstName = firstSubPage ? firstSubPage.id.replace('subtab-', '') : null;
+    if (targetSubTab !== firstName) {
+      switchSubTab(targetSubTab);
+      // 重新触发数据加载，确保当前子标签有数据
+      onTabShow(targetTab);
+    }
+  }
+  refreshAll();
+  // 快速指引：首次登录显示，之后可通过 localStorage 关闭
+  if (localStorage.getItem('guide_dismissed') === '1') {
+    const guideEl = document.getElementById('quick-guide-card');
+    if (guideEl) guideEl.style.display = 'none';
+  }
+}
+
+function dismissGuide() {
+  localStorage.setItem('guide_dismissed', '1');
+  const guideEl = document.getElementById('quick-guide-card');
+  if (guideEl) guideEl.style.display = 'none';
+  toast('快速指引已隐藏', 'success');
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  const pw = document.getElementById('password').value;
+  const path = window._isSetup ? '/api/auth/setup' : '/api/auth/login';
+  const r = await api('POST', path, { password: pw });
+  if (r.status === 200) {
+    showMain();
+  } else {
+    document.getElementById('loginMsg').textContent = r.data.error || '失败';
+  }
+  return false;
+}
+
+async function logout() {
+  await api('POST', '/api/auth/logout');
+  location.reload();
+}
+
+// ==================== 主题切换 ====================
+function initTheme() {
+  const saved = localStorage.getItem('theme');
+  if (saved === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    document.getElementById('themeToggle').textContent = '☀️';
+  } else if (saved === 'light') {
+    document.documentElement.setAttribute('data-theme', 'light');
+    document.getElementById('themeToggle').textContent = '🌙';
+  } else {
+    // 跟随系统
+    const isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    document.getElementById('themeToggle').textContent = isDark ? '☀️' : '🌙';
+  }
+}
+
+function toggleTheme() {
+  const current = document.documentElement.getAttribute('data-theme');
+  const btn = document.getElementById('themeToggle');
+  if (current === 'dark') {
+    document.documentElement.setAttribute('data-theme', 'light');
+    localStorage.setItem('theme', 'light');
+    btn.textContent = '🌙';
+  } else {
+    document.documentElement.setAttribute('data-theme', 'dark');
+    localStorage.setItem('theme', 'dark');
+    btn.textContent = '☀️';
+  }
+}
+
+// ==================== 标签页 ====================
+function switchTab(tab) {
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelector(`.nav-item[data-tab="${tab}"]`)?.classList.add('active');
+  // 切换 tab-page（完全依赖 CSS 类控制可见性，不用内联 style.display）
+  document.querySelectorAll('.tab-page').forEach(p => p.classList.remove('active'));
+  const tabPage = document.getElementById('tab-' + tab);
+  if (tabPage) {
+    tabPage.classList.add('active');
+    // 重置该 tab 内所有子标签页状态（移除 active 类和内联样式）
+    const allSubPages = tabPage.querySelectorAll('.sub-tab-page');
+    allSubPages.forEach(sp => { sp.classList.remove('active'); sp.style.display = ''; });
+    // 激活第一个子标签
+    if (allSubPages.length > 0) {
+      allSubPages[0].classList.add('active');
+      const defaultName = allSubPages[0].id.replace('subtab-', '');
+      tabPage.querySelectorAll('.sub-tab-btn').forEach(b => b.classList.remove('active'));
+      const defaultBtn = tabPage.querySelector(`.sub-tab-btn[onclick*="${defaultName}"]`);
+      if (defaultBtn) defaultBtn.classList.add('active');
+    }
+  }
+  localStorage.setItem('activeTab', tab);
+  onTabShow(tab);
+}
+document.querySelectorAll('.nav-item').forEach(item => {
+  item.addEventListener('click', () => {
+    const tab = item.dataset.tab;
+    if (!tab) return;
+    switchTab(tab);
+    // 手机端点击导航后自动关闭侧边栏
+    document.querySelector('.sidebar').classList.remove('open');
+  });
+});
+
+// 子标签切换
+function switchSubTab(name) {
+  // 只操作当前可见的 tab-page 内的子标签
+  const activeTab = document.querySelector('.tab-page.active');
+  if (activeTab) {
+    activeTab.querySelectorAll('.sub-tab-btn').forEach(b => b.classList.remove('active'));
+    activeTab.querySelectorAll('.sub-tab-page').forEach(p => {
+      p.classList.remove('active');
+      p.style.display = ''; // 清除内联样式，让 CSS 类控制可见性
+    });
+  }
+  const page = document.getElementById('subtab-' + name);
+  if (page) { page.classList.add('active'); }
+  // 找到对应的按钮并标记active
+  document.querySelectorAll('.sub-tab-btn').forEach(b => {
+    if (b.getAttribute('onclick')?.includes(name)) b.classList.add('active');
+  });
+  localStorage.setItem('activeSubTab', name);
+}
+
+// ==================== 快捷键 & 表单未保存提醒 ====================
+let formModified = false;
+let lastSavedState = {};
+
+// 监听表单变化
+document.addEventListener('input', (e) => {
+  if (e.target.matches('.form-input, .form-select, .form-textarea')) {
+    formModified = true;
+  }
+});
+
+// Ctrl+S 保存当前表单
+document.addEventListener('keydown', (e) => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    e.preventDefault();
+    const activeTab = document.querySelector('.tab-page.active')?.id;
+    if (activeTab === 'tab-credentials') {
+      // 根据当前子标签页保存
+      const activeSubTab = document.querySelector('.sub-tab-page.active')?.id;
+      if (activeSubTab === 'subtab-schedule-settings') {
+        saveThresholds?.();
+      } else {
+        // 保存当前可见的凭证
+        toast('请按对应卡片旁的保存按钮', 'info');
+      }
+    }
+    formModified = false;
+  }
+});
+
+// 切换页面（不再弹未保存提醒）
+const originalSwitchTab = switchTab;
+window.switchTab = function(tab) {
+  formModified = false;
+  originalSwitchTab(tab);
+};
+
+// 日志视图切换（实时日志 / 推送历史 / 操作日志）
+function switchLogView(view) {
+  const rtBtn = document.getElementById('log-toggle-realtime');
+  const htBtn = document.getElementById('log-toggle-history');
+  const auBtn = document.getElementById('log-toggle-audit');
+  const rtView = document.getElementById('log-view-realtime');
+  const htView = document.getElementById('log-view-history');
+  const auView = document.getElementById('log-view-audit');
+  // 重置所有按钮
+  rtBtn.className = 'btn btn-sm btn-secondary';
+  htBtn.className = 'btn btn-sm btn-secondary';
+  auBtn.className = 'btn btn-sm btn-secondary';
+  // 隐藏所有视图
+  rtView.style.display = 'none';
+  htView.style.display = 'none';
+  auView.style.display = 'none';
+  // 显示当前视图
+  if (view === 'realtime') {
+    rtBtn.className = 'btn btn-sm btn-primary';
+    rtView.style.display = '';
+    loadLogs(true);
+  } else if (view === 'history') {
+    htBtn.className = 'btn btn-sm btn-primary';
+    htView.style.display = '';
+    loadHistory();
+  } else {
+    auBtn.className = 'btn btn-sm btn-primary';
+    auView.style.display = '';
+    loadAuditLogs();
+  }
+}
+
+// 诊断核验视图切换
+function switchDiagView(view) {
+  const healthBtn = document.getElementById('diag-toggle-health');
+  const dgBtn = document.getElementById('diag-toggle-diagnose');
+  const vfBtn = document.getElementById('diag-toggle-verify');
+  const healthView = document.getElementById('diag-view-health');
+  const dgView = document.getElementById('diag-view-diagnose');
+  const vfView = document.getElementById('diag-view-verify');
+  // 重置所有按钮和视图
+  healthBtn.className = 'btn btn-sm btn-secondary';
+  dgBtn.className = 'btn btn-sm btn-secondary';
+  vfBtn.className = 'btn btn-sm btn-secondary';
+  healthView.style.display = 'none';
+  dgView.style.display = 'none';
+  vfView.style.display = 'none';
+  // 显示当前视图
+  if (view === 'health') {
+    healthBtn.className = 'btn btn-sm btn-primary';
+    healthView.style.display = '';
+  } else if (view === 'diagnose') {
+    dgBtn.className = 'btn btn-sm btn-primary';
+    dgView.style.display = '';
+  } else {
+    vfBtn.className = 'btn btn-sm btn-primary';
+    vfView.style.display = '';
+    loadVerifyLocations();
+  }
+}
+
+function onTabShow(tab) {
+  const loaders = {
+    credentials: () => { loadCredentials(); loadSchedule(); loadWeatherProvider(); loadAiProvider(); loadSunsetOffset(); loadPushTemplate(); loadCacheInfo(); loadCrossValidation(); },
+    locations: () => { loadLocations(); setTimeout(initMap, 100); }, score: () => { loadThresholds(); loadPreviewLocs(); },
+    logs: () => { loadLogs(true); loadHistory(); loadAuditLogs(); loadVerifyLocations(); },
+    
+    upgrade: () => { loadVersions(); loadUpdateStatus(); }, process: loadProcessInfo,
+  };
+  if (loaders[tab]) loaders[tab]();
+}
+
+// ==================== SSE ====================
+let evtSource;
+let sseConnected = false;
+let sseRetryCount = 0;
+
+function initSSE() {
+  if (evtSource) evtSource.close();
+  evtSource = new EventSource('/api/sse');
+  
+  evtSource.onopen = () => {
+    sseConnected = true;
+    sseRetryCount = 0;
+    updateSSEStatus();
+  };
+  
+  evtSource.onmessage = (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      handleEvent(msg);
+    } catch {}
+  };
+  
+  evtSource.onerror = () => {
+    sseConnected = false;
+    sseRetryCount++;
+    updateSSEStatus();
+    // EventSource 会自动重连，无需手动处理
+  };
+}
+
+function updateSSEStatus() {
+  const indicator = document.getElementById('sse-status');
+  if (!indicator) return;
+  const dot = indicator.querySelector('.sse-dot') || indicator.firstElementChild;
+  if (!dot) return;
+  const txt = document.getElementById('sseText');
+  if (sseConnected) {
+    dot.className = 'sse-dot connected';
+    indicator.title = '实时连接已建立';
+    if (txt) txt.textContent = '已连接';
+  } else if (sseRetryCount > 0) {
+    dot.className = 'sse-dot disconnected';
+    indicator.title = `连接断开，正在重连 (${sseRetryCount})...`;
+    if (txt) txt.textContent = '重连中';
+  } else {
+    dot.className = 'sse-dot connecting';
+    indicator.title = '正在连接...';
+    if (txt) txt.textContent = '连接中';
+  }
+}
+
+function handleEvent(msg) {
+  // 事件驱动刷新（不再显示实时事件卡片）
+  const refreshers = {
+    credential_updated: loadCredentials,
+    location_added: () => { loadLocations(); loadManualSunsetLocs(); }, location_updated: () => { loadLocations(); loadManualSunsetLocs(); }, location_deleted: () => { loadLocations(); loadManualSunsetLocs(); },
+    config_updated: loadThresholds,
+    schedule_updated: loadSchedule,
+    cache_refreshed: () => { loadCacheInfo(); loadSunsetInfo(); },
+    cache_cleared: () => { loadCacheInfo(); },
+    upgrade_applied: () => { loadVersions(); loadUpdateStatus(); toast('升级已应用，需重启', 'success'); },
+    upgrade_rolled_back: () => { loadVersions(); loadUpdateStatus(); toast('已回滚', 'success'); },
+    process_restarted: () => { setTimeout(loadProcessInfo, 2000); toast('已重启', 'success'); },
+    test_pushed: loadCredentials,
+    test_full_done: () => { loadCredentials(); loadCacheInfo(); },
+    manual_pushed: () => { loadHistory(); loadStats(); },
+    scheduled_task_done: (msg) => { loadScheduledTasks(); loadHistory(); loadStats(); toast(`预约任务已执行: ${msg.data?.location || ''}`, 'success'); },
+  };
+  if (refreshers[msg.type]) refreshers[msg.type]();
+}
+
+// ==================== 数据加载 ====================
+async function refreshAll() { loadLocations(); loadThresholds(); loadProcessInfo(); loadStats(); loadSunsetInfo(); loadCacheInfo(); loadSchedule(); loadSunsetOffset(); loadManualSunsetLocs(); initSunsetMode(); loadScheduledTasks(); }
+
+async function loadSunsetInfo() {
+  const r = await api('GET', '/api/sunset');
+  const d = r.data || {};
+  const el = document.getElementById('sunset-info');
+  if (!d.locations || d.locations.length === 0) {
+    el.innerHTML = '<div class="text-muted">暂无日落数据（等待 08:00 定时任务自动计算）</div>';
+    return;
+  }
+  const morningTime = d.morning_time || '未知';
+  let html = `<div class="text-muted mb-1">早上任务执行: ${morningTime}</div>`;
+  html += '<table style="margin-top: 8px;"><thead><tr><th>地点</th><th>日落时间</th><th>推送时间</th><th>来源</th></tr></thead><tbody>';
+  for (const loc of d.locations) {
+    const sourceTag = loc.source === 'api' ? '<span class="tag tag-success">API</span>' : 
+                      loc.source === 'calc' ? '<span class="tag tag-info">NOAA天文计算</span>' : 
+                      '<span class="tag tag-warning">默认</span>';
+    html += `<tr><td>${loc.name}</td><td><b>🌅 ${loc.sunset_time}</b></td><td>📤 ${loc.push_time}</td><td>${sourceTag}</td></tr>`;
+  }
+  html += '</tbody></table>';
+  html += '<div class="text-muted mt-2" style="font-size: 11px;">💡 日落时间基于 NOAA 天文公式计算（精度 ±2 分钟），根据地点经纬度和当日日期自动推算。推送时间 = 日落时间 - ' + (d.locations[0]?.sunset_offset || 50) + ' 分钟。</div>';
+  el.innerHTML = html;
+}
+
+// 日落推送模式切换
+function setSunsetMode(mode) {
+  const autoBtn = document.getElementById('sunset-mode-auto-btn');
+  const manualBtn = document.getElementById('sunset-mode-manual-btn');
+  const autoDesc = document.getElementById('sunset-mode-auto-desc');
+  const manualPanel = document.getElementById('sunset-mode-manual-panel');
+  
+  if (mode === 'auto') {
+    autoBtn.className = 'btn btn-primary';
+    manualBtn.className = 'btn';
+    autoDesc.style.display = 'block';
+    manualPanel.style.display = 'none';
+  } else {
+    autoBtn.className = 'btn';
+    manualBtn.className = 'btn btn-primary';
+    autoDesc.style.display = 'none';
+    manualPanel.style.display = 'block';
+    loadManualSunsetLocs(); // 切换到手动模式时刷新地点列表
+  }
+}
+
+// 初始化日落模式（每次打开页面默认自动模式，手动仅当次有效）
+function initSunsetMode() {
+  setSunsetMode('auto');
+}
+
+// 手动日落推送功能
+async function loadManualSunsetLocs() {
+  const sel = document.getElementById('manual-sunset-loc');
+  if (!sel) return;
+  try {
+    const r = await api('GET', '/api/locations');
+    const locs = r.data || [];
+    if (locs.length === 0) {
+      sel.innerHTML = '<option value="">暂无地点，请先添加</option>';
+      return;
+    }
+    // 显示所有地点（手动测试不限制启用状态），启用的排前面
+    const sorted = locs.sort((a, b) => (b.enabled ? 1 : 0) - (a.enabled ? 1 : 0));
+    sel.innerHTML = sorted.map(l => {
+      const tag = l.enabled ? '' : ' ⚠️';
+      return `<option value="${l.id}">${l.name}${tag}</option>`;
+    }).join('');
+  } catch (e) {
+    sel.innerHTML = '<option value="">加载失败</option>';
+  }
+}
+
+async function scheduleManualSunset() {
+  const el = document.getElementById('manual-sunset-result');
+  const sunsetTime = document.getElementById('manual-sunset-time').value;
+  const locId = document.getElementById('manual-sunset-loc').value;
+  const offset = parseInt(document.getElementById('manual-sunset-offset').value) || 50;
+  
+  if (!sunsetTime) {
+    el.innerHTML = '<div class="tag tag-warning">请先设置日落时间</div>';
+    return;
+  }
+  if (!locId) {
+    el.innerHTML = '<div class="tag tag-warning">请选择地点</div>';
+    return;
+  }
+  
+  el.innerHTML = '<div class="text-muted">⏳ 正在计算推送时间并预约...</div>';
+  
+  try {
+    const r = await api('POST', '/api/sunset/manual/schedule', {
+      sunset_time: sunsetTime,
+      sunset_offset: offset,
+      location_id: parseInt(locId)
+    });
+    
+    if (r.status !== 200 || !r.data?.ok) {
+      el.innerHTML = `<div class="tag tag-danger">❗ ${r.data?.error || '操作失败'}</div>`;
+      return;
+    }
+    
+    const d = r.data;
+    let html = `<div style="padding: 16px; background: rgba(34,197,94,0.08); border: 1px solid rgba(34,197,94,0.3); border-radius: 8px;">`;
+    html += `<div style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">✅ 预约成功</div>`;
+    html += `<div style="display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px;">`;
+    html += `<div><b>🌅 日落:</b> ${d.sunset_time}</div>`;
+    html += `<div><b>📤 推送时间:</b> ${d.push_time} (提前${d.sunset_offset}分钟)</div>`;
+    html += `<div><b>📍 地点:</b> ${d.location}</div>`;
+    html += `</div>`;
+    
+    if (d.executed_immediately) {
+      html += `<div style="margin-top: 10px; padding: 8px; background: rgba(245,158,11,0.1); border-radius: 6px; font-size: 12px;">`;
+      html += `⚡ 推送时间已过，已立即执行推送`;
+      if (d.push_results) {
+        const results = d.push_results;
+        html += `<div style="margin-top: 6px;"><b>推送结果:</b> `;
+        html += Object.keys(results).map(ch => {
+          const r = results[ch];
+          return r.success ? `<span class="tag tag-success">✓ ${ch}</span>` : `<span class="tag tag-danger">✗ ${ch}: ${r.message}</span>`;
+        }).join(' ');
+        html += `</div>`;
+      }
+      html += `</div>`;
+    } else {
+      html += `<div style="margin-top: 10px; padding: 8px; background: rgba(59,130,246,0.08); border-radius: 6px; font-size: 12px;">`;
+      html += `⏰ 系统将在 <b>${d.push_time}</b> 自动拉取天气数据并推送推送`;
+      html += `</div>`;
+    }
+    
+    html += `</div>`;
+    el.innerHTML = html;
+    // 刷新预约任务列表
+    loadScheduledTasks();
+  } catch (e) {
+    el.innerHTML = `<div class="tag tag-danger">请求失败: ${e.message}</div>`;
+  }
+}
+
+async function loadScheduledTasks() {
+  const panel = document.getElementById('scheduled-tasks-panel');
+  if (!panel) return;
+  try {
+    const r = await api('GET', '/api/sunset/manual/scheduled');
+    const jobs = r.data?.jobs || [];
+    if (jobs.length === 0) {
+      panel.innerHTML = '';
+      return;
+    }
+    let html = `<div class="card-title" style="font-size: 13px;">⏳ 待执行的预约任务 (${jobs.length})</div>`;
+    html += '<table><thead><tr><th>#</th><th>推送时间</th><th>日落时间</th><th>提前量</th><th>地点</th><th>操作</th></tr></thead><tbody>';
+    for (const j of jobs) {
+      html += `<tr>`;
+      html += `<td>${j.id}</td>`;
+      html += `<td><b>📤 ${j.push_time}</b></td>`;
+      html += `<td>🌅 ${j.sunset_time}</td>`;
+      html += `<td>${j.sunset_offset}分钟</td>`;
+      html += `<td>${j.location}</td>`;
+      html += `<td><button class="btn btn-danger" style="padding: 4px 10px; font-size: 11px;" onclick="cancelScheduledTask(${j.id})">❌ 取消</button></td>`;
+      html += `</tr>`;
+    }
+    html += '</tbody></table>';
+    panel.innerHTML = html;
+  } catch (e) {
+    panel.innerHTML = '';
+  }
+}
+
+async function cancelScheduledTask(jobId) {
+  if (!confirm(`确定取消预约任务 #${jobId} 吗？`)) return;
+  try {
+    const r = await api('POST', '/api/sunset/manual/scheduled/cancel', { job_id: jobId });
+    if (r.data?.ok) {
+      toast(`任务 #${jobId} 已取消`, 'success');
+      loadScheduledTasks();
+    } else {
+      toast(r.data?.error || '取消失败', 'error');
+    }
+  } catch (e) {
+    toast('取消失败: ' + e.message, 'error');
+  }
+}
+
+async function loadCacheInfo() {
+  const r = await api('GET', '/api/cache/weather');
+  const el = document.getElementById('cache-info');
+  const cache = r.data?.cache || [];
+  if (cache.length === 0) {
+    el.innerHTML = '<div class="text-muted">暂无缓存数据（服务启动后或手动拉取后生成）</div>';
+    return;
+  }
+  let html = '<table><thead><tr><th>地点</th><th>数据时间</th><th>来源</th><th>天气概况</th></tr></thead><tbody>';
+  for (const c of cache) {
+    const w = c.data || {};
+    // 只显示主要云型（取最高值的层）
+    let cloudLabel = '';
+    if (w.cloud_high !== undefined || w.cloud_mid !== undefined || w.cloud_low !== undefined) {
+      const layers = [
+        { name: '高云', val: w.cloud_high || 0, color: '#7c3aed' },
+        { name: '中云', val: w.cloud_mid || 0, color: '#3b82f6' },
+        { name: '低云', val: w.cloud_low || 0, color: '#6b7280' },
+      ];
+      const dominant = layers.reduce((a, b) => a.val >= b.val ? a : b);
+      if (dominant.val > 0) {
+        cloudLabel = `<span style="color:${dominant.color};font-weight:600">${dominant.name} ${dominant.val.toFixed(0)}%</span>`;
+      }
+    }
+    const cr = w.cloudrate?.toFixed(0) || '?';
+    const weather = `云量 ${cr}%` + (cloudLabel ? ` (${cloudLabel})` : '') + ` · 湿度 ${w.humidity?.toFixed(0) || '?'}% · 风速 ${w.wind?.toFixed(1) || '?'}m/s`;
+    html += `<tr><td>${c.location_name}</td><td>${c.fetched_at_str}</td><td><span class="tag tag-info">${c.source}</span></td><td class="text-muted">${weather}</td></tr>`;
+  }
+  html += '</tbody></table>';
+  el.innerHTML = html;
+}
+
+async function refreshWeatherCache() {
+  const el = document.getElementById('cache-info');
+  el.innerHTML = '<div class="text-muted">🔄 正在拉取 API 数据...</div>';
+  try {
+    const r = await api('POST', '/api/cache/refresh', {});
+    if (r.status !== 200) { toast('拉取失败', 'error'); return; }
+    const results = r.data.results || {};
+    const entries = Object.entries(results);
+    
+    // 检查是否有启用的地点
+    if (entries.length === 0) {
+      el.innerHTML = '<div style="color: var(--warning);">⚠️ 没有启用的地点，请先在「地点」页添加并启用地点</div>';
+      toast('没有可刷新的地点', 'error');
+      return;
+    }
+    
+    // 检查是否全部失败
+    const allFailed = entries.every(([id, v]) => !v.success);
+    if (allFailed) {
+      let html = '<div style="color: var(--danger);">❌ 全部拉取失败：</div><ul style="margin-top: 4px; padding-left: 20px;">';
+      for (const [id, v] of entries) {
+        html += `<li style="color: var(--danger);">${v.name}: ${v.error || '未知错误'}</li>`;
+      }
+      html += '</ul>';
+      el.innerHTML = html;
+      toast('天气数据拉取失败，请检查 API Token', 'error');
+      return;
+    }
+    
+    let html = '<div style="margin-bottom: 8px;">';
+    for (const [id, v] of entries) {
+      const tag = v.success ? 'tag-success' : 'tag-danger';
+      const label = v.success ? '✓ 成功' : '✗ 失败';
+      html += `<span class="tag ${tag}" style="margin: 2px;">${v.name}: ${label}</span> `;
+    }
+    html += '</div>';
+    el.innerHTML = html;
+    toast('天气数据已刷新', 'success');
+    // 重新加载缓存信息
+    setTimeout(loadCacheInfo, 500);
+  } catch (e) {
+    el.innerHTML = '<div style="color: var(--danger);">请求失败: ' + e.message + '</div>';
+  }
+}
+
+async function clearWeatherCache() {
+  if (!confirm('确认清除所有天气缓存？清除后下次操作将重新从 API 获取数据。')) return;
+  try {
+    const r = await api('POST', '/api/cache/clear', {});
+    if (r.status === 200) {
+      toast('缓存已清除', 'success');
+      loadCacheInfo();
+    } else {
+      toast('清除失败', 'error');
+    }
+  } catch (e) {
+    toast('请求失败: ' + e.message, 'error');
+  }
+}
+
+async function loadStats() {
+  const locs = await api('GET', '/api/locations');
+  document.getElementById('statLocations').textContent = locs.data.filter(l => l.enabled).length;
+  const hist = await api('GET', '/api/history?limit=1000');
+  const monthAgo = Date.now() / 1000 - 30 * 86400;
+  const monthHist = hist.data.filter(h => h.pushed_at > monthAgo);
+  document.getElementById('statMonthPush').textContent = monthHist.filter(h => h.success).length;
+  const successScores = monthHist.filter(h => h.success && h.score > 0).map(h => h.score);
+  document.getElementById('statAvgScore').textContent = successScores.length ? (successScores.reduce((a,b)=>a+b,0)/successScores.length).toFixed(1) : '-';
+  const vers = await api('GET', '/api/versions');
+  document.getElementById('statVersions').textContent = vers.data.length;
+}
+
+// 天气 API 平台 token 配置信息
+const WEATHER_TOKEN_CONFIG = {
+  caiyun: { label: '彩云天气 Token', placeholder: '从 https://dashboard.caiyunapp.com 获取', key: 'caiyun_token' },
+  qweather: { label: '和风天气 API Key', placeholder: '从 https://dev.qweather.com 获取', key: 'qweather_token' },
+  tomorrowio: { label: 'Tomorrow.io API Key', placeholder: '从 https://app.tomorrow.io/signup 获取（免费额度100次/天）', key: 'tomorrowio_token' },
+  openweathermap: { label: 'OpenWeatherMap API Key', placeholder: '从 https://openweathermap.org/api 获取', key: 'openweathermap_token' },
+  weatherapi: { label: 'WeatherAPI.com Key', placeholder: '从 https://www.weatherapi.com 获取', key: 'weatherapi_token' },
+  openmeteo: { label: 'Open-Meteo (免费无需 Token)', placeholder: '免费开源，无需注册', key: 'openmeteo_token', noToken: true },
+  visualcrossing: { label: 'Visual Crossing API Key', placeholder: '从 https://www.visualcrossing.com 获取（免费1000次/天）', key: 'visualcrossing_token' },
+  windy: { label: 'Windy API Key', placeholder: '从 https://api.windy.com/keys 获取（Point Forecast）', key: 'windy_token' },
+};
+
+async function loadCredentials() {
+  const r = await api('GET', '/api/credentials');
+  const data = r.data || {};
+  const values = data.values || {};
+  const configured = data.configured || {};
+
+  // 渲染推送通道凭证状态
+  ['wechat_webhook', 'dingtalk_webhook', 'feishu_webhook', 'serverchan_sendkey', 'pushplus_token'].forEach(k => {
+    const el = document.getElementById('cred-' + k);
+    if (el) {
+      if (configured[k]) {
+        el.value = '';
+        el.placeholder = `✓ 已配置 (${values[k]})，输入新值覆盖或点 🗑️ 清除`;
+      } else {
+        el.value = values[k] || '';
+      }
+    }
+    const statusEl = document.getElementById('cred-status-' + k);
+    if (statusEl) {
+      if (configured[k]) {
+        statusEl.className = 'tag tag-success';
+        statusEl.textContent = '✓ 已配置';
+      } else {
+        statusEl.className = 'tag tag-warning';
+        statusEl.textContent = '未配置';
+      }
+    }
+  });
+
+  // 渲染 AI 服务凭证状态
+  ['gemini_key', 'zhipu_key'].forEach(k => {
+    const el = document.getElementById('cred-' + k);
+    if (el) {
+      if (configured[k]) {
+        el.value = '';
+        el.placeholder = `✓ 已配置 (${values[k]})，输入新值覆盖或点 🗑️ 清除`;
+      } else {
+        el.value = values[k] || '';
+      }
+    }
+    const statusEl = document.getElementById('cred-status-' + k);
+    if (statusEl) {
+      if (configured[k]) {
+        statusEl.className = 'tag tag-success';
+        statusEl.textContent = '✓ 已配置';
+      } else {
+        statusEl.className = 'tag tag-warning';
+        statusEl.textContent = '未配置';
+      }
+    }
+  });
+
+  // 加载代理配置
+  const cfgRes = await api('GET', '/api/config');
+  const proxyUrl = (cfgRes.data && cfgRes.data.https_proxy) || '';
+  const proxyInput = document.getElementById('proxy-url');
+  if (proxyInput) {
+    proxyInput.value = proxyUrl;
+    proxyInput.placeholder = proxyUrl ? `✓ 已配置: ${proxyUrl}` : '例: http://192.168.1.100:7890';
+  }
+
+  // 渲染天气 API token 字段（所有平台）
+  renderWeatherTokenFields(values, configured);
+
+  // 加载推送地点选择器
+  loadPushLocSelect();
+
+  // 加载富文本模式状态
+  loadRichTextMode();
+
+  // 更新凭证状态汇总
+  // updateCredSummary(values, configured, proxyUrl); // 已移除配置状态汇总UI
+}
+
+function renderWeatherTokenFields(values, configured) {
+  const container = document.getElementById('weather-token-fields');
+  if (!container) return;
+  
+  // 只显示当前选中平台的 token 字段
+  const currentProvider = document.querySelector('input[name="weather-provider"]:checked')?.value || 'caiyun';
+  const cfg = WEATHER_TOKEN_CONFIG[currentProvider];
+  if (!cfg || cfg.noToken) {
+    container.innerHTML = '<p class="text-muted" style="font-size: 12px;">当前平台无需配置 Token</p>';
+    updateCurrentProviderTag(currentProvider, configured);
+    return;
+  }
+  const isConfigured = configured[cfg.key];
+  const statusTag = isConfigured 
+    ? '<span class="tag tag-success" style="margin-left: 8px;">✓ 已配置</span>'
+    : '<span class="tag tag-warning" style="margin-left: 8px;">未配置</span>';
+  const placeholder = isConfigured 
+    ? `✓ 已配置 (${values[cfg.key] || ''})，输入新值覆盖或点 🗑️ 清除`
+    : cfg.placeholder;
+  
+  container.innerHTML = `
+  <div class="form-group" id="token-field-${currentProvider}">
+    <label class="form-label">${cfg.label} ${statusTag}</label>
+    <div class="flex gap-1">
+      <input type="text" id="cred-${cfg.key}" class="form-input weather-token-input" 
+             data-provider="${currentProvider}" data-key="${cfg.key}"
+             placeholder="${placeholder}" style="flex: 1;">
+      <button class="btn btn-sm btn-danger" onclick="clearCredential('${cfg.key}')" title="清除">🗑️</button>
+      <button class="btn btn-sm" onclick="saveCredential('${cfg.key}')">💾</button>
+    </div>
+  </div>`;
+
+  // 更新当前 provider 的 tag
+  updateCurrentProviderTag(currentProvider, configured);
+}
+
+function updateCurrentProviderTag(provider, configured) {
+  const tagEl = document.getElementById('current-provider-tag');
+  const cfg = WEATHER_TOKEN_CONFIG[provider];
+  if (tagEl && cfg) {
+    const isConfigured = cfg.noToken || configured?.[cfg.key];
+    tagEl.textContent = isConfigured ? `当前: ${cfg.label.split(' ')[0]} ✓` : `当前: ${cfg.label.split(' ')[0]} (未配置Token)`;
+    tagEl.className = 'tag ' + (isConfigured ? 'tag-success' : 'tag-warning');
+  }
+}
+
+async function loadWeatherProvider() {
+  const r = await api('GET', '/api/weather/providers');
+  const current = r.data?.current || 'caiyun';
+  document.querySelectorAll('input[name="weather-provider"]').forEach(el => {
+    el.checked = (el.value === current);
+  });
+  // 获取凭证配置状态，更新标签
+  const credR = await api('GET', '/api/credentials');
+  const configured = credR.data?.configured || {};
+  updateCurrentProviderTag(current, configured);
+}
+
+async function saveWeatherProvider() {
+  const selected = document.querySelector('input[name="weather-provider"]:checked')?.value || 'caiyun';
+  const r = await api('POST', '/api/config', { weather_provider: selected });
+  if (r.status === 200) {
+    const cfg = WEATHER_TOKEN_CONFIG[selected];
+    document.getElementById('provider-msg').innerHTML = `<span style="color: var(--success);">✓ 已切换到 ${cfg?.label || selected}，正在重启...</span>`;
+    // 立即刷新 token 字段显示
+    loadCredentials();
+    autoRestart('天气API平台已切换');
+  }
+}
+
+async function saveCredential(key) {
+  const el = document.getElementById('cred-' + key);
+  if (!el) return;
+  const val = el.value;
+  // 如果值为空且已配置，说明用户没修改，不保存
+  const r0 = await api('GET', '/api/credentials');
+  const wasConfigured = (r0.data?.configured || {})[key];
+  if (!val && wasConfigured) {
+    toast('未修改，如需清除请点击 🗑️ 按钮', 'info');
+    return;
+  }
+  const r = await api('POST', '/api/credentials', { key, value: val });
+  if (r.status === 200) {
+    toast(`${key} 已保存`, 'success');
+    loadCredentials();
+    // 如果是天气 token，保存后自动重启
+    const weatherKeys = Object.values(WEATHER_TOKEN_CONFIG).map(c => c.key);
+    if (weatherKeys.includes(key)) {
+      autoRestart('天气API Token已更新');
+    }
+  }
+  else toast(r.data.error, 'error');
+}
+
+async function clearCredential(key) {
+  if (!confirm(`确认清除 ${key}？清除后需重新配置才能使用相关功能。`)) return;
+  const r = await api('POST', '/api/credentials/delete', { key });
+  if (r.status === 200) { toast(`${key} 已清除`, 'success'); loadCredentials(); }
+  else toast(r.data.error, 'error');
+}
+
+function switchPushChannel() {
+  const selected = document.querySelector('input[name="push-channel"]:checked')?.value || 'wechat_webhook';
+  document.querySelectorAll('.push-channel-field').forEach(el => {
+    el.style.display = el.dataset.channel === selected ? '' : 'none';
+  });
+}
+
+function switchAiProvider() {
+  const selected = document.querySelector('input[name="ai-provider"]:checked')?.value || 'gemini';
+  document.querySelectorAll('.ai-key-field').forEach(el => {
+    el.style.display = el.dataset.provider === selected ? '' : 'none';
+  });
+  // 代理配置仅 Gemini 需要显示
+  const proxySection = document.getElementById('ai-proxy-section');
+  if (proxySection) {
+    proxySection.style.display = selected === 'gemini' ? '' : 'none';
+  }
+  // 保存到后端
+  api('POST', '/api/config', { ai_provider: selected });
+}
+
+function loadAiProvider() {
+  api('GET', '/api/config').then(r => {
+    const provider = (r.data && r.data.ai_provider) || 'gemini';
+    const radio = document.querySelector(`input[name="ai-provider"][value="${provider}"]`);
+    if (radio) radio.checked = true;
+    switchAiProvider();
+  });
+}
+
+async function saveProxy() {
+  const el = document.getElementById('proxy-url');
+  if (!el) return;
+  const val = el.value.trim();
+  const r = await api('POST', '/api/config', { https_proxy: val });
+  if (r.status === 200) {
+    toast('代理配置已保存', 'success');
+    const msgEl = document.getElementById('proxy-msg');
+    if (msgEl) {
+      msgEl.innerHTML = '<span style="color: var(--success);">✓ 已保存，正在重启服务...</span>';
+    }
+    autoRestart('代理配置已更新');
+  } else {
+    toast(r.data.error || '保存失败', 'error');
+  }
+}
+
+async function saveAllPushChannels() {
+  for (const k of ['wechat_webhook', 'dingtalk_webhook', 'feishu_webhook', 'serverchan_sendkey', 'pushplus_token']) {
+    const v = document.getElementById('cred-' + k).value;
+    if (v) await api('POST', '/api/credentials', { key: k, value: v });
+  }
+  toast('推送通道已保存', 'success');
+  loadCredentials();
+}
+
+async function saveSingleChannel(key) {
+  const el = document.getElementById('cred-' + key);
+  if (!el) return;
+  const v = el.value.trim();
+  if (!v) {
+    toast('请输入配置内容', 'warning');
+    return;
+  }
+  const r = await api('POST', '/api/credentials', { key, value: v });
+  if (r.status === 200) {
+    toast('已保存', 'success');
+    loadCredentials();
+  } else {
+    toast('保存失败: ' + (r.data?.error || '未知错误'), 'error');
+  }
+}
+
+// 加载推送地点选择器
+async function loadPushLocSelect() {
+  const r = await api('GET', '/api/locations');
+  const sel = document.getElementById('push-loc-select');
+  if (!sel) return;
+  const locs = (r.data || []).filter(l => l.enabled);
+  sel.innerHTML = '<option value="">默认（第一个启用地点）</option>' +
+    locs.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+}
+
+function getSelectedLocId() {
+  const sel = document.getElementById('push-loc-select');
+  const val = sel?.value;
+  return val ? parseInt(val, 10) : undefined;
+}
+
+// 富文本模式
+async function loadRichTextMode() {
+  try {
+    const r = await api('GET', '/api/config');
+    const enabled = r.data?.rich_text_mode || false;
+    const toggle = document.getElementById('rich-text-toggle');
+    if (toggle) toggle.checked = enabled;
+  } catch (e) { /* ignore */ }
+}
+
+async function saveRichTextMode(enabled) {
+  try {
+    await api('POST', '/api/config', { rich_text_mode: enabled });
+    toast(enabled ? '富文本模式已开启' : '富文本模式已关闭', 'success');
+  } catch (e) {
+    toast('保存失败: ' + e.message, 'error');
+  }
+}
+
+// 多源交叉验证
+async function loadCrossValidation() {
+  try {
+    const r = await api('GET', '/api/config');
+    const enabled = r.data?.cross_validation || false;
+    const toggle = document.getElementById('cross-validation-toggle');
+    if (toggle) toggle.checked = enabled;
+    const statusEl = document.getElementById('cross-validation-status');
+    if (statusEl) {
+      statusEl.innerHTML = enabled
+        ? '<span class="tag tag-success">✓ 已启用</span> 傍晚推送将同时请求两个 API 并取均值'
+        : '<span class="tag tag-info">仅主源</span> 傍晚推送使用当前主天气 API';
+    }
+  } catch (e) { /* ignore */ }
+}
+
+async function saveCrossValidation(enabled) {
+  try {
+    await api('POST', '/api/config', { cross_validation: enabled });
+    toast(enabled ? '多源交叉验证已开启' : '多源交叉验证已关闭', 'success');
+    loadCrossValidation();
+  } catch (e) {
+    toast('保存失败: ' + e.message, 'error');
+  }
+}
+
+// Webhook 连通性预检
+async function doWebhookPrecheck() {
+  const resultEl = document.getElementById('test-push-result');
+  resultEl.innerHTML = '<div class="text-muted">🔍 正在预检所有通道连通性...</div>';
+  // 先获取凭证配置状态
+  const credR = await api('GET', '/api/credentials');
+  const configured = credR.data?.configured || {};
+  const keys = [
+    { key: 'wechat_webhook', label: '企业微信' },
+    { key: 'dingtalk_webhook', label: '钉钉' },
+    { key: 'feishu_webhook', label: '飞书' },
+    { key: 'serverchan_sendkey', label: 'Server酱' },
+    { key: 'pushplus_token', label: 'PushPlus' },
+  ];
+  const results = [];
+  for (const { key, label } of keys) {
+    const el = document.getElementById('cred-' + key);
+    const val = el?.value || '';
+    if (val) {
+      // 用户输入了新值，用新值测试
+      const r = await api('POST', '/api/test/webhook', { key, value: val });
+      results.push({ label, ok: r.data?.ok, msg: r.data?.message || '' });
+    } else if (configured[key]) {
+      // 已配置，发送空值让后端从数据库读取
+      const r = await api('POST', '/api/test/webhook', { key, value: '' });
+      results.push({ label, ok: r.data?.ok, msg: r.data?.message || '' });
+    } else {
+      // 未配置，跳过
+      results.push({ label, ok: null, msg: '未配置' });
+    }
+  }
+  let html = '<table style="margin-top: 8px;">';
+  for (const { label, ok, msg } of results) {
+    const tag = ok === true ? '<span class="tag tag-success">连通</span>' :
+                ok === false ? '<span class="tag tag-danger">失败</span>' :
+                '<span class="tag tag-info">跳过</span>';
+    html += `<tr><td>${label}</td><td>${tag}</td><td class="text-muted">${(msg || '').slice(0, 80)}</td></tr>`;
+  }
+  html += '</table>';
+  resultEl.innerHTML = html;
+}
+
+// 配置导出
+async function exportConfig() {
+  const r = await api('GET', '/api/config/export');
+  if (r.status !== 200) { toast('导出失败', 'error'); return; }
+  const blob = new Blob([JSON.stringify(r.data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `sunset-bot-config-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('配置已导出', 'success');
+  document.getElementById('config-backup-result').innerHTML = '<span style="color: var(--success);">配置已下载为 JSON 文件</span>';
+}
+
+// 配置导入
+async function importConfig(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const text = await file.text();
+  let data;
+  try { data = JSON.parse(text); } catch { toast('JSON 解析失败', 'error'); return; }
+  if (!confirm('确认导入配置？当前配置将被覆盖（凭证不会被导入，需手动重新配置）。')) return;
+  const r = await api('POST', '/api/config/import', { ...data, import_credentials: false });
+  if (r.status === 200) {
+    toast('配置已导入，正在重启...', 'success');
+    const res = r.data.results;
+    document.getElementById('config-backup-result').innerHTML =
+      `<span style="color: var(--success);">导入完成: ${res.config} 项配置, ${res.locations} 个地点, ${res.templates} 个模板</span>`;
+    autoRestart('配置已导入');
+  } else {
+    toast('导入失败: ' + (r.data.error || '未知'), 'error');
+  }
+  event.target.value = '';
+}
+
+// 全能推送测试：测试消息 + 天气评分预览 + 可选手动推送
+async function doAllInOneTest() {
+  const resultEl = document.getElementById('test-push-result');
+  resultEl.innerHTML = '<div class="text-muted">🔔 正在发送测试消息并获取天气数据...</div>';
+  let html = '';
+  try {
+    // Step 1: 发送测试推送到所有通道
+    const r = await api('POST', '/api/test/push', {});
+    if (r.status === 200) {
+      const results = r.data.results || {};
+      const rows = Object.entries(results).map(([ch, v]) => {
+        if (!v.configured) return `<tr><td>${ch}</td><td><span class="tag tag-info">未配置</span></td><td class="text-muted">跳过</td></tr>`;
+        const tag = v.success ? 'tag-success' : 'tag-danger';
+        const label = v.success ? '成功' : '失败';
+        return `<tr><td>${ch}</td><td><span class="tag ${tag}">${label}</span></td><td class="text-muted">${(v.message || '').slice(0, 50)}</td></tr>`;
+      }).join('');
+      const anyConfigured = Object.values(results).some(v => v.configured);
+      if (!anyConfigured) html += '<div class="text-muted mb-1">⚠️ 未配置任何推送通道</div>';
+      html += '<div><b>📨 通道测试结果:</b></div><table style="margin-top: 4px;">' + rows + '</table>';
+      const anySuccess = Object.values(results).some(v => v.success);
+      if (anySuccess) toast('测试推送成功', 'success');
+      else if (anyConfigured) toast('测试推送失败，请检查 webhook 配置', 'error');
+    } else {
+      html += '<div style="color: var(--danger);">测试推送请求失败</div>';
+    }
+    loadCredentials();
+    
+    // Step 2: 获取天气评分预览（不推送）
+    try {
+      const r2 = await api('POST', '/api/test/full', { location_id: getSelectedLocId() });
+      if (r2.status === 200 && r2.data.ok) {
+        const d = r2.data;
+        const steps = d.steps || {};
+        html += '<div style="background: rgba(124,58,237,0.05); padding: 12px; border-radius: 8px; margin-top: 12px;">';
+        html += `<div><b>📍 地点:</b> ${d.location?.name || '未知'}</div>`;
+        if (steps.fetch?.success) {
+          const w = steps.fetch.data;
+          const source = steps.fetch.source || 'unknown';
+          const sourceTag = (source === 'cache_old') ? '<span class="tag tag-warning">旧缓存</span>' :
+                            (source === 'api' || source === 'cache') ? '<span class="tag tag-info">缓存</span>' :
+                            `<span class="tag tag-success">${source}</span>`;
+          html += `<div class="mt-1"><b>🌤 天气数据:</b> ${sourceTag}</div>`;
+          html += `<div class="grid-2 text-muted" style="font-size: 12px; margin-top: 4px;">`;
+          html += `<div>🌡️ ${w.temperature?.toFixed(1) || '?'}°C</div>`;
+          html += `<div>☁️ ${w.cloudrate != null ? w.cloudrate.toFixed(0) : '?'}%`;
+          if (w.cloud_high !== undefined) html += ` (高${w.cloud_high != null ? w.cloud_high.toFixed(0) : '?'}/中${w.cloud_mid != null ? w.cloud_mid.toFixed(0) : '?'}/低${w.cloud_low != null ? w.cloud_low.toFixed(0) : '?'})`;
+          html += `</div>`;
+          html += `<div>💧 ${w.humidity?.toFixed(0) || '?'}%</div>`;
+          html += `<div>🌬️ ${w.wind?.toFixed(1) || '?'} m/s</div>`;
+          html += `<div>👁️ ${w.visibility?.toFixed(1) || '?'} km</div>`;
+          html += `<div>🌧️ ${w.precipitation?.toFixed(2) || '0'} mm/h</div>`;
+          html += `</div>`;
+        }
+        if (steps.score) {
+          const rec = steps.score.recommend ? '<span class="tag tag-success">推荐</span>' : '<span class="tag tag-warning">不推荐</span>';
+          html += `<div class="mt-1"><b>📊 评分:</b> ${steps.score.score} 分 ${rec}</div>`;
+          const bd = steps.score.breakdown || {};
+          let bdText = '';
+          if (bd.cloud_high !== undefined) bdText += `高云:${bd.cloud_high} `;
+          if (bd.cloud_mid !== undefined) bdText += `中云:${bd.cloud_mid} `;
+          if (bd.cloud_low !== undefined) bdText += `低云:${bd.cloud_low} `;
+          if (bd.cloudrate !== undefined) bdText += `云量:${bd.cloudrate} `;
+          bdText += `湿度:${bd.humidity} 风速:${bd.wind} 能见度:${bd.visibility} 降水:${bd.no_precip}`;
+          if (bd.dew_gap !== undefined) bdText += ` 露点差:${bd.dew_gap}`;
+          html += `<div class="text-muted" style="font-size: 11px; margin-top: 4px;">${bdText}</div>`;
+        }
+        if (steps.preview?.text) {
+          html += `<div class="mt-1"><b>📝 推送文案预览:</b></div>`;
+          html += `<pre style="font-size: 12px; line-height: 1.5; white-space: pre-wrap; color: var(--text-primary); margin-top: 4px; padding: 8px; background: rgba(0,0,0,0.03); border-radius: 6px;">${steps.preview.text}</pre>`;
+        }
+        // 强制推送按钮
+        html += `<div class="mt-2"><button class="btn btn-success btn-sm" onclick="doManualPush()">🚀 无视评分阈值，强制推送此文案</button></div>`;
+        html += '</div>';
+      } else if (r2.data?.error) {
+        html += `<div style="color: var(--danger); margin-top: 8px;">天气数据: ${r2.data.error}</div>`;
+      }
+    } catch(_) { /* 天气预览失败不影响测试推送结果 */ }
+    
+    resultEl.innerHTML = html;
+  } catch (e) {
+    resultEl.innerHTML = '<div style="color: var(--danger);">请求失败: ' + e.message + '</div>';
+  }
+}
+
+// 手动推送：无视评分阈值，直接推送晚霞文案（从全能测试结果中的按钮调用）
+async function doManualPush() {
+  const resultEl = document.getElementById('test-push-result');
+  resultEl.innerHTML = '<div class="text-muted">🚀 正在强制推送...</div>';
+  try {
+    const r = await api('POST', '/api/manual/push', { location_id: getSelectedLocId() });
+    if (r.status !== 200 || !r.data.ok) {
+      const err = r.data.error || '未知错误';
+      resultEl.innerHTML = `<div style="color: var(--danger);">❌ 推送失败: ${err}</div>`;
+      return;
+    }
+    const d = r.data;
+    let html = '<div style="background: rgba(16,185,129,0.06); padding: 12px; border-radius: 8px; margin-top: 8px;">';
+    html += `<div><b>🚀 强制推送完成</b> · 评分 ${d.score} 分</div>`;
+    const results = d.results || {};
+    const rows = Object.entries(results).map(([ch, v]) => {
+      const tag = v.success ? 'tag-success' : 'tag-danger';
+      const label = v.success ? '成功' : '失败';
+      return `<tr><td>${ch}</td><td><span class="tag ${tag}">${label}</span></td><td class="text-muted">${(v.message || '').slice(0, 50)}</td></tr>`;
+    }).join('');
+    html += '<table style="margin-top: 8px;">' + rows + '</table>';
+    if (d.text) {
+      html += `<details style="margin-top: 8px;"><summary class="text-muted" style="cursor:pointer;font-size:12px;">查看推送文案</summary>`;
+      html += `<pre style="font-size: 12px; line-height: 1.5; white-space: pre-wrap; color: var(--text-primary); margin-top: 4px; padding: 8px; background: rgba(0,0,0,0.03); border-radius: 6px;">${d.text}</pre></details>`;
+    }
+    html += '</div>';
+    resultEl.innerHTML = html;
+    toast('强制推送完成', 'success');
+    loadHistory(); loadStats();
+  } catch (e) {
+    resultEl.innerHTML = '<div style="color: var(--danger);">请求失败: ' + e.message + '</div>';
+  }
+}
+
+// ============ 推送时间配置 ============
+let scheduleTimes = [];
+
+async function loadSchedule() {
+  const r = await api('GET', '/api/schedule');
+  scheduleTimes = Array.isArray(r.data.times) ? r.data.times : [];
+  renderScheduleTimes();
+}
+
+function renderScheduleTimes() {
+  const el = document.getElementById('schedule-times-list');
+  if (scheduleTimes.length === 0) {
+    el.innerHTML = '<div class="text-muted">未设置推送时间</div>';
+    return;
+  }
+  el.innerHTML = scheduleTimes.map((t, i) => `
+    <span class="tag tag-info" style="margin: 2px; padding: 6px 12px; font-size: 14px;">
+      ${t}
+      <span style="cursor: pointer; margin-left: 6px; color: var(--danger);" onclick="removeScheduleTime(${i})">✕</span>
+    </span>
+  `).join('');
+}
+
+function addScheduleTime() {
+  const input = document.getElementById('new-schedule-time');
+  const t = input.value;
+  if (!t) return toast('请选择时间', 'error');
+  if (scheduleTimes.includes(t)) return toast('该时间已存在', 'error');
+  scheduleTimes.push(t);
+  scheduleTimes.sort();
+  renderScheduleTimes();
+  input.value = '';
+}
+
+function removeScheduleTime(idx) {
+  scheduleTimes.splice(idx, 1);
+  renderScheduleTimes();
+  // 自动保存删除
+  api('POST', '/api/schedule', { times: scheduleTimes }).then(r => {
+    if (r.status === 200) {
+      toast('已删除并保存', 'success');
+      autoRestart('推送时间已更新');
+    }
+  });
+}
+
+async function saveSchedule() {
+  // 如果有新时间输入，先添加
+  const newTimeEl = document.getElementById('new-schedule-time');
+  const newTime = newTimeEl.value;
+  let hasNewTime = false;
+  if (newTime && !scheduleTimes.includes(newTime)) {
+    scheduleTimes.push(newTime);
+    scheduleTimes.sort();
+    newTimeEl.value = '';
+    hasNewTime = true;
+  }
+  // 如果没有新时间输入，不执行保存和重启
+  if (!hasNewTime) {
+    toast('请先输入一个推送时间', 'info');
+    return;
+  }
+  const r = await api('POST', '/api/schedule', { times: scheduleTimes });
+  if (r.status === 200) {
+    toast('推送时间已保存', 'success');
+    document.getElementById('schedule-msg').innerHTML = '<span style="color: var(--success);">✓ 已保存，正在重启服务...</span>';
+    renderScheduleTimes();
+    autoRestart('推送时间已更新');
+  } else {
+    toast(r.data.error, 'error');
+    document.getElementById('schedule-msg').innerHTML = '<span style="color: var(--danger);">✗ ' + r.data.error + '</span>';
+  }
+}
+
+// ============ 日落偏移配置 ============
+async function loadSunsetOffset() {
+  const r = await api('GET', '/api/config');
+  const offset = (r.data && r.data.sunset_offset_minutes) || '50';
+  document.getElementById('sunset-offset').value = offset;
+  // 同步更新固定时间区域的显示
+  const displayEl = document.getElementById('sunset-offset-display');
+  if (displayEl) displayEl.textContent = '🌇 日落前' + offset + '分钟';
+}
+
+async function saveSunsetOffset() {
+  const offset = document.getElementById('sunset-offset').value;
+  if (!offset || offset < 10 || offset > 120) {
+    toast('偏移量应在 10-120 分钟之间', 'error');
+    return;
+  }
+  const r = await api('POST', '/api/config', { sunset_offset_minutes: offset });
+  if (r.status === 200) {
+    toast('日落偏移已保存', 'success');
+    document.getElementById('sunset-offset-msg').innerHTML = '<span style="color: var(--success);">✓ 已保存，正在重启服务...</span>';
+    // 同步更新固定时间区域的显示
+    const displayEl = document.getElementById('sunset-offset-display');
+    if (displayEl) displayEl.textContent = '🌇 日落前' + offset + '分钟';
+    autoRestart('日落偏移已更新');
+  } else {
+    toast(r.data.error, 'error');
+  }
+}
+
+async function loadLocations() {
+  const r = await api('GET', '/api/locations');
+  const locs = r.data || [];
+  const tb = document.getElementById('locations-tbody');
+  if (locs.length === 0) {
+    tb.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted);">📍 暂无地点，请在上方添加第一个地点</td></tr>';
+  } else {
+  tb.innerHTML = locs.map(l => `
+    <tr id="loc-row-${l.id}">
+      <td><span class="loc-name">${l.name}</span></td>
+      <td><span class="loc-lng">${l.lng.toFixed(4)}</span></td>
+      <td><span class="loc-lat">${l.lat.toFixed(4)}</span></td>
+      <td>${l.enabled ? '<span class="tag tag-success">启用</span>' : '<span class="tag tag-warning">停用</span>'}</td>
+      <td>
+        <button class="btn btn-sm btn-secondary" onclick="editLocation(${l.id}, '${l.name}', ${l.lng}, ${l.lat})">✏️</button>
+        <button class="btn btn-sm btn-secondary" onclick="toggleLocation(${l.id}, ${!l.enabled})">${l.enabled ? '停用' : '启用'}</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteLocation(${l.id})">🗑️</button>
+      </td>
+    </tr>
+  `).join('');
+  }
+  // 更新地图 markers
+  updateMapMarkers(locs);
+}
+
+// ==================== 地图功能 ====================
+let _map = null;
+let _mapMarkers = [];
+
+function initMap() {
+  if (_map) { _map.invalidateSize(); return; }
+  if (typeof L === 'undefined') return;
+  const el = document.getElementById('location-map');
+  if (!el) return;
+  _map = L.map('location-map').setView([35.0, 105.0], 4);
+  // 使用多个瓦片 CDN 源，依次尝试（国内网络友好）
+  const tileUrls = [
+    'https://tile.openstreetmap.de/{z}/{x}/{y}.png',
+    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  ];
+  let tileLayer = L.tileLayer(tileUrls[0], {
+    attribution: '© OpenStreetMap',
+    maxZoom: 18,
+  }).addTo(_map);
+  // 瓦片加载失败时尝试下一个源
+  let _tileIdx = 0;
+  tileLayer.on('tileerror', function() {
+    if (_tileIdx < tileUrls.length - 1) {
+      _tileIdx++;
+      tileLayer.setUrl(tileUrls[_tileIdx]);
+    }
+  });
+  // 点击地图添加地点
+  _map.on('click', function(e) {
+    document.getElementById('loc-lng').value = e.latlng.lng.toFixed(4);
+    document.getElementById('loc-lat').value = e.latlng.lat.toFixed(4);
+    document.getElementById('loc-name').focus();
+    toast(`已填充坐标: ${e.latlng.lng.toFixed(4)}, ${e.latlng.lat.toFixed(4)}`, 'success');
+  });
+  // 修复 Leaflet 在隐藏容器中的尺寸问题（多次 invalidate 确保生效）
+  setTimeout(() => { if (_map) _map.invalidateSize(); }, 250);
+  setTimeout(() => { if (_map) _map.invalidateSize(); }, 800);
+  setTimeout(() => { if (_map) _map.invalidateSize(); }, 1500);
+}
+
+function updateMapMarkers(locs) {
+  if (!_map) { initMap(); if (!_map) return; }
+  // 清除旧 markers
+  _mapMarkers.forEach(m => _map.removeLayer(m));
+  _mapMarkers = [];
+  locs.forEach(l => {
+    if (l.enabled) {
+      const marker = L.marker([l.lat, l.lng]).addTo(_map);
+      marker.bindPopup(`<b>${l.name}</b><br>经度: ${l.lng.toFixed(4)}<br>纬度: ${l.lat.toFixed(4)}`);
+      _mapMarkers.push(marker);
+    }
+  });
+  // 自动适应视野
+  if (_mapMarkers.length > 0) {
+    const group = L.featureGroup(_mapMarkers);
+    _map.fitBounds(group.getBounds().pad(0.2));
+  }
+}
+
+async function addLocation() {
+  const name = document.getElementById('loc-name').value.trim();
+  const lng = parseFloat(document.getElementById('loc-lng').value);
+  const lat = parseFloat(document.getElementById('loc-lat').value);
+  if (!name || isNaN(lng) || isNaN(lat)) return toast('请填写完整', 'error');
+  const r = await api('POST', '/api/locations', { name, lng, lat });
+  if (r.status === 200) {
+    toast('已添加', 'success');
+    document.getElementById('loc-name').value = '';
+    document.getElementById('loc-lng').value = '';
+    document.getElementById('loc-lat').value = '';
+    loadLocations();
+  }
+  else toast(r.data.error, 'error');
+}
+
+async function toggleLocation(id, enabled) {
+  await api('POST', '/api/locations/update', { id, enabled });
+}
+
+async function deleteLocation(id) {
+  if (!confirm('确认删除？')) return;
+  await api('POST', '/api/locations/delete', { id });
+  loadLocations();
+}
+
+function editLocation(id, name, lng, lat) {
+  // 将地点信息填入添加表单，进入编辑模式
+  document.getElementById('loc-name').value = name;
+  document.getElementById('loc-lng').value = lng;
+  document.getElementById('loc-lat').value = lat;
+  
+  // 修改添加按钮为更新按钮
+  const addBtn = document.getElementById('loc-add-btn');
+  const cancelBtn = document.getElementById('loc-cancel-btn');
+  addBtn.textContent = '💾 更新地点';
+  addBtn.onclick = async function() {
+    const newName = document.getElementById('loc-name').value.trim();
+    const newLng = parseFloat(document.getElementById('loc-lng').value);
+    const newLat = parseFloat(document.getElementById('loc-lat').value);
+    if (!newName || isNaN(newLng) || isNaN(newLat)) return toast('请填写完整', 'error');
+    const r = await api('POST', '/api/locations/update', { id, name: newName, lng: newLng, lat: newLat });
+    if (r.status === 200) {
+      toast('已更新', 'success');
+      exitEditMode();
+      loadLocations();
+    } else {
+      toast(r.data.error, 'error');
+    }
+  };
+  cancelBtn.style.display = 'inline-block';
+  
+  // 滚动到表单
+  document.getElementById('loc-name').focus();
+  document.getElementById('tab-locations').scrollIntoView({ behavior: 'smooth' });
+}
+
+function exitEditMode() {
+  document.getElementById('loc-name').value = '';
+  document.getElementById('loc-lng').value = '';
+  document.getElementById('loc-lat').value = '';
+  const addBtn = document.getElementById('loc-add-btn');
+  const cancelBtn = document.getElementById('loc-cancel-btn');
+  addBtn.textContent = '➕ 添加';
+  addBtn.onclick = addLocation;
+  cancelBtn.style.display = 'none';
+}
+
+async function loadThresholds() {
+  const r = await api('GET', '/api/config');
+  const t = (r.data && r.data.thresholds) || {};
+  const map = { cloudrate_min: 'th-cloudrate_min', cloudrate_max: 'th-cloudrate_max', humidity_min: 'th-humidity_min', humidity_max: 'th-humidity_max', wind_max: 'th-wind_max', visibility_min: 'th-visibility_min', score_threshold: 'th-score_threshold' };
+  Object.entries(map).forEach(([k, id]) => {
+    const el = document.getElementById(id);
+    if (el) el.value = t[k] ?? el.value;
+  });
+}
+
+async function saveThresholds() {
+  const vals = {
+    cloudrate_min: document.getElementById('th-cloudrate_min').value,
+    cloudrate_max: document.getElementById('th-cloudrate_max').value,
+    humidity_min: document.getElementById('th-humidity_min').value,
+    humidity_max: document.getElementById('th-humidity_max').value,
+    wind_max: document.getElementById('th-wind_max').value,
+    visibility_min: document.getElementById('th-visibility_min').value,
+    score_threshold: document.getElementById('th-score_threshold').value,
+  };
+  // 验证所有字段非空且为数字
+  for (const [key, val] of Object.entries(vals)) {
+    if (val === '' || isNaN(+val)) {
+      toast('请填写完整的阈值配置', 'error');
+      return;
+    }
+  }
+  const t = {
+    cloudrate_min: +vals.cloudrate_min,
+    cloudrate_max: +vals.cloudrate_max,
+    humidity_min: +vals.humidity_min,
+    humidity_max: +vals.humidity_max,
+    wind_max: +vals.wind_max,
+    visibility_min: +vals.visibility_min,
+    score_threshold: +vals.score_threshold,
+  };
+  // 验证数值合理性
+  if (t.cloudrate_min >= t.cloudrate_max) { toast('云量最小值应小于最大值', 'error'); return; }
+  if (t.humidity_min >= t.humidity_max) { toast('湿度最小值应小于最大值', 'error'); return; }
+  if (t.wind_max <= 0) { toast('风速最大值应大于0', 'error'); return; }
+  if (t.visibility_min <= 0) { toast('能见度最小值应大于0', 'error'); return; }
+  if (t.score_threshold < 0 || t.score_threshold > 100) { toast('推荐阈值应在0-100之间', 'error'); return; }
+  const r = await api('POST', '/api/config', { thresholds: t });
+  if (r.status === 200) toast('阈值已保存', 'success');
+}
+
+async function previewWithCurrentThresholds() {
+  const t = {
+    cloudrate_min: +document.getElementById('th-cloudrate_min').value,
+    cloudrate_max: +document.getElementById('th-cloudrate_max').value,
+    humidity_min: +document.getElementById('th-humidity_min').value,
+    humidity_max: +document.getElementById('th-humidity_max').value,
+    wind_max: +document.getElementById('th-wind_max').value,
+    visibility_min: +document.getElementById('th-visibility_min').value,
+    score_threshold: +document.getElementById('th-score_threshold').value,
+  };
+  // 获取第一个启用的地点
+  const locs = await api('GET', '/api/locations');
+  const loc = (locs.data || []).find(l => l.enabled);
+  if (!loc) { toast('请先添加并启用一个地点', 'error'); return; }
+  const container = document.getElementById('threshold-preview-result');
+  container.innerHTML = '<div class="text-muted">计算中...</div>';
+  const r = await api('POST', '/api/preview', { location_id: loc.id, thresholds: t });
+  if (r.status !== 200) { container.innerHTML = `<div class="text-muted">预览失败: ${r.data.error}</div>`; return; }
+  const d = r.data;
+  const scoreColor = d.score >= t.score_threshold ? 'var(--success)' : d.score >= t.score_threshold - 10 ? 'var(--warning, #f59e0b)' : 'var(--danger)';
+  const wouldPush = d.score >= t.score_threshold;
+  container.innerHTML = `
+    <div class="card" style="background: rgba(124,58,237,0.05); padding: 16px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <div><b>${loc.name}</b> · 使用当前阈值预览</div>
+        <div style="font-size:28px; font-weight:700; color:${scoreColor};">${d.score}分</div>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+        <span class="tag ${wouldPush ? 'tag-success' : 'tag-warning'}">${wouldPush ? '✅ 会触发推送' : '❌ 不触发推送'}（阈值: ${t.score_threshold}分）</span>
+      </div>
+      <div style="font-size:12px; color:var(--text-secondary);">
+        ${Object.entries(d.breakdown || {}).map(([k,v]) => `<span style="margin-right:12px;">${k}: <b>${v}</b></span>`).join('')}
+      </div>
+    </div>`;
+}
+
+function resetThresholds() {
+  if (!confirm('确定要恢复默认阈值吗？')) return;
+  document.getElementById('th-cloudrate_min').value = 30;
+  document.getElementById('th-cloudrate_max').value = 85;
+  document.getElementById('th-humidity_min').value = 20;
+  document.getElementById('th-humidity_max').value = 80;
+  document.getElementById('th-wind_max').value = 6;
+  document.getElementById('th-visibility_min').value = 8;
+  document.getElementById('th-score_threshold').value = 65;
+  toast('已恢复默认值，点击保存生效', 'info');
+}
+
+async function loadPreviewLocs() {
+  const r = await api('GET', '/api/locations');
+  const sel = document.getElementById('preview-loc');
+  sel.innerHTML = (r.data || []).map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+}
+
+async function doPreview() {
+  const id = +document.getElementById('preview-loc').value;
+  const r = await api('POST', '/api/preview', { location_id: id });
+  if (r.status !== 200) return toast(r.data.error, 'error');
+  const d = r.data;
+  const rec = d.recommend ? '<span class="tag tag-success">推荐</span>' : '<span class="tag tag-warning">不推荐</span>';
+  const breakdown = d.breakdown;
+  const sourceTag = d.data_source === 'cache_old' ? '<span class="tag tag-warning">旧缓存</span>' :
+                    (d.data_source === 'api' || d.data_source === 'cache') ? '<span class="tag tag-info">缓存</span>' :
+                    `<span class="tag tag-success">${d.data_source}</span>`;
+  document.getElementById('preview-result').innerHTML = `
+    <div class="card" style="background: rgba(124, 58, 237, 0.05);">
+      <div class="flex-between mb-2">
+        <div><b>${d.location.name}</b> ${rec} ${sourceTag}</div>
+        <div style="font-size: 32px; font-weight: 700; background: var(--gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent;">${d.score}</div>
+      </div>
+      <div class="grid-2 text-muted" style="font-size: 13px;">
+        <div>🌡️ 温度: ${d.weather.temperature?.toFixed(1) || '?'}°C</div>
+        <div>☁️ 云量: ${d.weather.cloudrate?.toFixed(0) || '?'}%</div>
+        ${breakdown.cloud_high !== undefined ? `<div>🔺 高云: ${d.weather.cloud_high?.toFixed(0) || '?'}% (${breakdown.cloud_high}分)</div>` : ''}
+        ${breakdown.cloud_mid !== undefined ? `<div>➖ 中云: ${d.weather.cloud_mid?.toFixed(0) || '?'}% (${breakdown.cloud_mid}分)</div>` : ''}
+        ${breakdown.cloud_low !== undefined ? `<div>🔻 低云: ${d.weather.cloud_low?.toFixed(0) || '?'}% (${breakdown.cloud_low}分)</div>` : ''}
+        ${breakdown.cloudrate !== undefined ? `<div>☁️ 云量评分: ${breakdown.cloudrate}分</div>` : ''}
+        <div>💧 湿度: ${d.weather.humidity?.toFixed(0) || '?'}% (${breakdown.humidity}分)</div>
+        <div>🌬️ 风速: ${d.weather.wind?.toFixed(1) || '?'} m/s (${breakdown.wind}分)</div>
+        <div>👁️ 能见度: ${d.weather.visibility?.toFixed(1) || '?'} km (${breakdown.visibility}分)</div>
+        <div>🌧️ 降水: ${d.weather.precipitation?.toFixed(2) || '0'} mm/h (${breakdown.no_precip}分)</div>
+        ${breakdown.dew_gap !== undefined ? `<div>💦 露点差: ${breakdown.dew_gap}分</div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+async function loadHistory() {
+  try {
+    // 先获取地点列表用于映射名称
+    const locR = await api('GET', '/api/locations');
+    const locMap = {};
+    (locR.data || []).forEach(l => { locMap[l.id] = l.name; });
+    
+    const r = await api('GET', '/api/history?limit=50');
+    const tb = document.getElementById('history-tbody');
+    if (!tb) return;
+    const historyData = r.data || [];
+    if (historyData.length === 0) {
+      tb.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted);">📭 暂无推送记录</td></tr>';
+      return;
+    }
+    tb.innerHTML = historyData.map(h => {
+      const locName = locMap[h.location_id] || (h.location_id ? `ID:${h.location_id}` : '测试推送');
+      return `
+      <tr>
+        <td>${fmtTime(h.pushed_at)}</td>
+        <td>${locName}</td>
+        <td>${h.score || '-'}</td>
+        <td>${h.channel}</td>
+        <td>${h.success ? '<span class="tag tag-success">成功</span>' : '<span class="tag tag-danger">失败</span>'}</td>
+        <td class="text-muted">${(h.message || '').slice(0, 50)}</td>
+      </tr>
+    `}).join('');
+  } catch(e) {
+    console.error('loadHistory failed:', e);
+  }
+}
+
+async function loadLogs(force) {
+  try {
+    const box = document.getElementById('logBox');
+    // 用户手动滚动到底部以外时暂停自动刷新（force=true 强制刷新，如手动点击切换视图）
+    if (!force && box && box.scrollTop > 5) return;
+    const r = await api('GET', '/api/log/tail');
+    if (!box) return;
+    if (!r.data?.lines) { box.innerHTML = '<div class="text-muted">无日志</div>'; return; }
+    // 用户已滚动时不覆盖内容
+    if (!force && box.scrollTop > 5) return;
+    // 反转：最新日志在最上面
+    box.innerHTML = r.data.lines.reverse().map(l => {
+      let cls = 'log-INFO';
+      if (l.includes('[WARNING]')) cls = 'log-WARNING';
+      else if (l.includes('[ERROR]')) cls = 'log-ERROR';
+      return `<div class="log-line ${cls}">${l.replace(/</g, '&lt;')}</div>`;
+    }).join('');
+    box.scrollTop = 0;
+  } catch(e) {
+    console.error('loadLogs failed:', e);
+  }
+}
+setInterval(() => { if (document.getElementById('tab-logs').classList.contains('active')) loadLogs(); }, 5000);
+
+let auditDataCache = [];
+
+async function loadAuditLogs() {
+  try {
+    const r = await api('GET', '/api/audit/logs?limit=500');
+    const tb = document.getElementById('audit-tbody');
+    if (!tb) return;
+    const auditData = r.data || [];
+    auditDataCache = auditData;
+    renderAuditLogs(auditData);
+  } catch(e) {
+    console.error('loadAuditLogs failed:', e);
+  }
+}
+
+function renderAuditLogs(data) {
+  const tb = document.getElementById('audit-tbody');
+  if (!tb) return;
+  if (data.length === 0) {
+    tb.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:24px;color:var(--text-muted);">📝 无匹配记录</td></tr>';
+    return;
+  }
+  const actionLabels = { config_update: '配置修改', credential_update: '凭证更新', credential_delete: '凭证删除',
+    location_add: '添加地点', location_delete: '删除地点', manual_push: '手动推送',
+    config_export: '配置导出', config_import: '配置导入', webhook_test: 'Webhook预检',
+    silent_failure_alert: '静默告警' };
+  tb.innerHTML = data.map(a => {
+    const resultTag = a.result === 'success' ? '<span class="tag tag-success">成功</span>' :
+                      a.result === 'fail' ? '<span class="tag tag-danger">失败</span>' :
+                      '<span class="tag tag-info">' + a.result + '</span>';
+    return `<tr>
+      <td>${fmtTime(a.created_at)}</td>
+      <td>${actionLabels[a.action] || a.action}</td>
+      <td>${a.target || '-'}</td>
+      <td class="text-muted" style="max-width:300px;overflow:hidden;text-overflow:ellipsis;">${(a.detail || '').slice(0, 80)}</td>
+      <td>${resultTag}</td>
+    </tr>`;
+  }).join('');
+}
+
+function filterAuditLogs() {
+  const typeFilter = document.getElementById('audit-filter-type')?.value || '';
+  const resultFilter = document.getElementById('audit-filter-result')?.value || '';
+  const dateFilter = document.getElementById('audit-filter-date')?.value || '';
+  
+  // 类型映射：筛选值 -> 匹配的 action 前缀
+  const typeMap = {
+    'config': ['config_', 'credential_'],
+    'location': ['location_'],
+    'push': ['manual_push', 'manual_sunset_', 'webhook_'],
+    'system': ['config_export', 'config_import', 'silent_']
+  };
+  
+  let filtered = auditDataCache;
+  
+  if (typeFilter && typeMap[typeFilter]) {
+    const prefixes = typeMap[typeFilter];
+    filtered = filtered.filter(a => prefixes.some(p => a.action?.startsWith(p)));
+  }
+  if (resultFilter) {
+    const resultVal = resultFilter === 'success' ? 'success' : 'fail';
+    filtered = filtered.filter(a => a.result === resultVal);
+  }
+  if (dateFilter) {
+    // created_at 是 Unix 时间戳（秒），转换为日期字符串比较
+    const filterDate = new Date(dateFilter);
+    const startTs = Math.floor(filterDate.getTime() / 1000);
+    const endTs = startTs + 86400; // 加一天
+    filtered = filtered.filter(a => a.created_at >= startTs && a.created_at < endTs);
+  }
+  
+  renderAuditLogs(filtered);
+}
+
+function clearAuditFilters() {
+  document.getElementById('audit-filter-type').value = '';
+  document.getElementById('audit-filter-result').value = '';
+  document.getElementById('audit-filter-date').value = '';
+  renderAuditLogs(auditDataCache);
+}
+
+async function doDiagnose() {
+  document.getElementById('diagnose-result').innerHTML = '<div class="text-muted">诊断中...</div>';
+  const r = await api('GET', '/api/diagnose');
+  const d = r.data;
+  const rows = Object.entries(d).map(([k, v]) => {
+    const tag = v.status === 'ok' ? 'tag-success' : v.status === 'fail' ? 'tag-danger' : 'tag-info';
+    return `<tr><td>${k}</td><td><span class="tag ${tag}">${v.status}</span></td><td class="text-muted">${v.msg}</td></tr>`;
+  }).join('');
+  document.getElementById('diagnose-result').innerHTML = `<table>${rows}</table>`;
+}
+
+async function doHealthCheck() {
+  const container = document.getElementById('health-result');
+  container.innerHTML = '<div class="text-muted">检查中...</div>';
+  try {
+    const r = await api('GET', '/api/health');
+    const d = r.data;
+    const overallTag = d.overall === 'ok' ? 'tag-success' : 'tag-danger';
+    let html = `<div style="margin-bottom: 12px;"><strong>整体状态：</strong><span class="tag ${overallTag}">${d.overall === 'ok' ? '✅ 正常' : '⚠️ 异常'}</span></div>`;
+    html += '<table><thead><tr><th>检查项</th><th>状态</th><th>详情</th></tr></thead><tbody>';
+    Object.entries(d.checks).forEach(([k, v]) => {
+      const tag = v.status === 'ok' ? 'tag-success' : v.status === 'fail' ? 'tag-danger' : v.status === 'warning' ? 'tag-warning' : 'tag-info';
+      const statusIcon = v.status === 'ok' ? '✅' : v.status === 'fail' ? '❌' : v.status === 'warning' ? '⚠️' : '⏭️';
+      html += `<tr><td>${v.name}</td><td><span class="tag ${tag}">${statusIcon} ${v.status}</span></td><td class="text-muted">${v.msg}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    container.innerHTML = html;
+  } catch (e) {
+    container.innerHTML = `<div class="tag tag-danger">检查失败: ${e.message}</div>`;
+  }
+}
+
+// ============ 数据核验 ============
+
+
+async function loadVerifyLocations() {
+  const r = await api('GET', '/api/locations');
+  const sel = document.getElementById('verify-location');
+  if (!sel || !r.data) return;
+  const locs = Array.isArray(r.data) ? r.data : (r.data.locations || []);
+  sel.innerHTML = '<option value="">选择地点...</option>';
+  locs.filter(l => l.enabled).forEach(l => {
+    sel.innerHTML += `<option value="${l.id}">${l.name}</option>`;
+  });
+}
+
+async function loadVerifyData() {
+  const sel = document.getElementById('verify-location');
+  const locId = sel.value;
+  if (!locId) return toast('请先选择地点', 'error');
+  toast('正在加载...', 'info');
+  const r = await api('GET', `/api/verify/data?location_id=${locId}`);
+  const d = r.data;
+  if (!d.ok) return toast(d.error || '加载失败', 'error');
+  // 来源和评分
+  document.getElementById('verify-source').textContent = d.source;
+  const scoreTag = d.recommend ? 'tag-success' : 'tag-warning';
+  document.getElementById('verify-score').className = `tag ${scoreTag}`;
+  document.getElementById('verify-score').textContent = `评分 ${d.score}`;
+  // 原始 JSON
+  document.getElementById('verify-raw-json').textContent = JSON.stringify(d.raw_weather, null, 2);
+  // 评分明细
+  const bd = d.breakdown || {};
+  const bdHtml = Object.entries(bd).map(([k, v]) => {
+    const label = {'cloudrate':'云量','humidity':'湿度','wind':'风速','visibility':'能见度','precipitation':'降水'}[k] || k;
+    return `<span class="tag tag-info" style="margin:2px;">${label}: ${typeof v === 'number' ? v.toFixed(1) : v}</span>`;
+  }).join(' ');
+  document.getElementById('verify-breakdown').innerHTML = bdHtml || '<span class="text-muted">无明细</span>';
+  // 显示卡片
+  document.getElementById('verify-raw-card').style.display = 'block';
+  document.getElementById('verify-compare-card').style.display = 'block';
+  // 隐藏之前的对比结果
+  document.getElementById('verify-result-card').style.display = 'none';
+  toast('数据加载完成', 'success');
+}
+
+async function doVerifyCompare() {
+  const sel = document.getElementById('verify-location');
+  const locId = sel.value;
+  const actualText = document.getElementById('verify-actual-input').value.trim();
+  if (!actualText) return toast('请先粘贴收到的推送消息', 'error');
+  if (!locId) return toast('请先选择地点', 'error');
+  toast('正在分析...', 'info');
+  const r = await api('POST', '/api/verify/compare', { location_id: parseInt(locId), actual_text: actualText });
+  const d = r.data;
+  if (!d.ok) return toast(d.error || '分析失败', 'error');
+  const s = d.summary;
+  // 总结
+  const scoreColor = s.overall_score >= 80 ? 'var(--success)' : s.overall_score >= 50 ? 'var(--warning, #f0ad4e)' : 'var(--danger)';
+  const scoreText = s.overall_score >= 80 ? '✅ 数据一致性高' : s.overall_score >= 50 ? '⚠️ 部分数据不一致' : '❌ 数据差异较大';
+  let summaryHtml = `
+    <div style="font-size: 18px; font-weight: bold; color: ${scoreColor}; margin-bottom: 8px;">
+      ${scoreText} (${s.overall_score}%)
+    </div>
+    <div style="font-size: 13px; color: var(--text-muted);">
+      数值匹配: ${s.match_count}/${s.total_checked}
+      &nbsp;|&nbsp; 地点: ${s.location_match ? '✅' : '❌'}
+      &nbsp;|&nbsp; 日落时间: ${s.sunset_match ? '✅' : '❌'}
+      &nbsp;|&nbsp; 推荐标签: ${s.recommend_match ? '✅' : '❌'}
+      ${s.source_match !== null ? `&nbsp;|&nbsp; 数据来源: ${s.source_match ? '✅' : '❌'}` : ''}
+    </div>
+  `;
+  document.getElementById('verify-result-summary').innerHTML = summaryHtml;
+  // 逐项检查
+  let checksHtml = '<table><thead><tr><th>字段</th><th>API 值</th><th>实际消息值</th><th>结果</th></tr></thead><tbody>';
+  for (const c of d.checks) {
+    const tag = c.match ? '<span class="tag tag-success">✓ 一致</span>' : '<span class="tag tag-danger">✗ 不一致</span>';
+    checksHtml += `<tr><td>${c.label}</td><td>${c.api_value}</td><td>${c.actual_value}</td><td>${tag}</td></tr>`;
+  }
+  checksHtml += '</tbody></table>';
+  document.getElementById('verify-result-checks').innerHTML = checksHtml;
+  document.getElementById('verify-result-card').style.display = 'block';
+  toast('对比分析完成', 'success');
+}
+
+function clearVerifyCompare() {
+  document.getElementById('verify-actual-input').value = '';
+  document.getElementById('verify-result-card').style.display = 'none';
+}
+
+function downloadDeployPackage(includeData = false) {
+  if (includeData) {
+    toast('正在打包完整部署包（含配置，不含推送记录）...', 'info');
+  } else {
+    toast('正在打包部署文件...', 'info');
+  }
+  const a = document.createElement('a');
+  a.href = '/download/deploy-package' + (includeData ? '?include_data=1' : '');
+  a.download = 'sunset-bot-deploy.zip';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+async function doUpgrade() {
+  const files = document.getElementById('upgrade-files').files;
+  if (!files.length) return toast('请先选择要上传的文件', 'error');
+  
+  // 检查文件名是否合法
+  const allowedFiles = ['bot.py', 'web.py', 'templates.html', 'requirements.txt', 'migrate.py',
+    'install.sh', 'start.sh', 'stop.sh', 'run_tests.sh', 'README.md',
+    'manifest.json', 'sw.js',
+    'tests/test_scoring.py', 'tests/test_pusher.py', 'tests/test_web_api.py',
+    'tests/test_fetcher.py', 'tests/test_e2e.py', 'tests/test_backup.py', 'tests/test_migrate.py'];
+  const fileNames = Array.from(files).map(f => f.name);
+  // 对 tests/ 下的文件做路径匹配
+  const checkNames = Array.from(files).map(f => {
+    // webkitRelativePath 不常用，直接用 name 匹配白名单
+    return f.name;
+  });
+  const badFiles = checkNames.filter(name => !allowedFiles.includes(name));
+  if (badFiles.length > 0) {
+    return toast(`不支持的文件: ${badFiles.join(', ')}`, 'error');
+  }
+  
+  const msgEl = document.getElementById('upgrade-msg');
+  msgEl.innerHTML = '<span class="text-muted">⏳ 正在上传并备份整个项目...</span>';
+  
+  try {
+    const fd = new FormData();
+    for (const f of files) fd.append('file', f);
+    const r = await fetch('/api/upgrade/file', { method: 'POST', body: fd, credentials: 'same-origin' });
+    const d = await r.json();
+    if (r.ok) {
+      toast('✅ 升级成功！正在重启服务...', 'success');
+      msgEl.innerHTML = `<div style="color: var(--success);">✅ 升级成功！备份: ${d.backup}<br/>已上传: ${fileNames.join(', ')}<br/><b>正在自动重启，请稍候...</b></div>`;
+      loadVersions();
+      // 自动重启（无需 confirm）
+      try {
+        // 记录当前 web 启动时间，用于判断重启是否完成
+        const statusBefore = await api('GET', '/api/process/status');
+        const oldStartupTime = statusBefore.data?.web_startup_time || 0;
+        await api('POST', '/api/process/restart');
+        msgEl.innerHTML = `<div style="color: var(--success);">✅ 升级成功！备份: ${d.backup}<br/>已上传: ${fileNames.join(', ')}<br/><b>⏳ 等待服务重启完成...</b></div>`;
+        // 轮询等待 web 进程重启完成（startup_time 变化）
+        let reloaded = false;
+        for (let i = 0; i < 30; i++) {
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          try {
+            const s = await api('GET', '/api/process/status');
+            const newTime = s.data?.web_startup_time || 0;
+            if (newTime > oldStartupTime) {
+              reloaded = true;
+              toast('✅ 服务已重启，页面刷新中...', 'success');
+              setTimeout(() => location.reload(), 500);
+              break;
+            }
+          } catch(_) { /* web 还在重启中，继续等待 */ }
+        }
+        if (!reloaded) {
+          toast('重启超时，请手动刷新页面（Ctrl+F5）', 'info');
+          msgEl.innerHTML += '<br/><span style="color: var(--warning);">⚠️ 重启超时，请手动刷新页面</span>';
+        }
+      } catch(e) {
+        toast('重启命令已发送，请手动刷新页面', 'info');
+      }
+    } else {
+      toast('升级失败: ' + (d.error || '未知错误'), 'error');
+      msgEl.innerHTML = `<div style="color: var(--danger);">❌ ${d.error || '未知错误'}</div>`;
+    }
+  } catch (e) {
+    toast('上传失败: ' + e.message, 'error');
+    msgEl.innerHTML = `<div style="color: var(--danger);">❌ 请求失败: ${e.message}</div>`;
+  }
+}
+
+// ==================== 版本更新检查 ====================
+async function loadUpdateStatus() {
+  try {
+    const r = await api('GET', '/api/update/status');
+    const d = r.data;
+    document.getElementById('updateCurrentVer').textContent = 'v' + d.current;
+    const repoInput = document.getElementById('updateRepoInput');
+    if (d.github_repo && !repoInput.value) repoInput.value = d.github_repo;
+    if (d.error) {
+      document.getElementById('updateLatestVer').textContent = '-';
+      document.getElementById('updateStatusBadge').textContent = d.error.includes('未配置') ? '未配置仓库' : '检查失败';
+      document.getElementById('updateStatusBadge').style.background = 'rgba(239,68,68,0.15)';
+      document.getElementById('updateStatusBadge').style.color = 'var(--danger)';
+      return;
+    }
+    if (d.latest) {
+      document.getElementById('updateLatestVer').textContent = 'v' + d.latest;
+    }
+    const badge = document.getElementById('updateStatusBadge');
+    const link = document.getElementById('updateReleaseLink');
+    if (d.has_update) {
+      badge.textContent = '🎉 有新版本';
+      badge.style.background = 'rgba(34,197,94,0.15)';
+      badge.style.color = 'var(--success)';
+      if (d.release_url) { link.href = d.release_url; link.style.display = 'inline'; }
+    } else {
+      badge.textContent = '✓ 已是最新';
+      badge.style.background = 'rgba(34,197,94,0.15)';
+      badge.style.color = 'var(--success)';
+      link.style.display = 'none';
+    }
+  } catch (e) { /* ignore */ }
+}
+
+async function checkUpdate() {
+  const repo = document.getElementById('updateRepoInput').value.trim();
+  const btn = document.getElementById('updateCheckBtn');
+  const msgEl = document.getElementById('update-msg');
+  btn.disabled = true;
+  btn.textContent = '⏳ 检查中...';
+  msgEl.innerHTML = '';
+  try {
+    const r = await api('POST', '/api/update/check', { github_repo: repo });
+    const d = r.data;
+    document.getElementById('updateCurrentVer').textContent = 'v' + d.current;
+    const badge = document.getElementById('updateStatusBadge');
+    const link = document.getElementById('updateReleaseLink');
+    if (d.error) {
+      badge.textContent = '检查失败';
+      badge.style.background = 'rgba(239,68,68,0.15)';
+      badge.style.color = 'var(--danger)';
+      msgEl.innerHTML = `<span style="color: var(--danger);">${d.error}</span>`;
+    } else if (d.has_update) {
+      badge.textContent = '🎉 有新版本';
+      badge.style.background = 'rgba(34,197,94,0.15)';
+      badge.style.color = 'var(--success)';
+      document.getElementById('updateLatestVer').textContent = 'v' + d.latest;
+      if (d.release_url) { link.href = d.release_url; link.style.display = 'inline'; }
+      msgEl.innerHTML = `<span style="color: var(--success);">发现新版本 v${d.latest}，可下载后通过上方"上传新版本"进行升级</span>`;
+      toast(`发现新版本 v${d.latest}！`, 'success');
+    } else {
+      badge.textContent = '✓ 已是最新';
+      badge.style.background = 'rgba(34,197,94,0.15)';
+      badge.style.color = 'var(--success)';
+      document.getElementById('updateLatestVer').textContent = 'v' + d.latest;
+      link.style.display = 'none';
+      msgEl.innerHTML = '<span style="color: var(--success);">当前已是最新版本 ✓</span>';
+    }
+  } catch (e) {
+    msgEl.innerHTML = `<span style="color: var(--danger);">检查失败: ${e.message}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🔍 检查更新';
+  }
+}
+
+async function loadVersions() {
+  const r = await api('GET', '/api/versions');
+  const tb = document.getElementById('versions-tbody');
+  tb.innerHTML = (r.data || []).map(v => `
+    <tr>
+      <td><code style="background: var(--bg-primary); padding: 2px 6px; border-radius: 4px;">${v.name}</code></td>
+      <td>${v.created_at.replace('T', ' ').slice(0, 19)}</td>
+      <td>${v.size_kb} KB</td>
+      <td><span class="tag tag-info">${v.file_count || v.files.length} 个文件</span></td>
+      <td class="text-muted" style="font-size: 11px;">${v.files.slice(0, 5).join(', ')}${v.files.length > 5 ? '...' : ''}</td>
+      <td>
+        <button class="btn btn-sm btn-secondary" onclick="rollback('${v.name}')">回滚</button>
+        <button class="btn btn-sm btn-danger" onclick="deleteVersion('${v.name}')" style="margin-left: 4px;">删除</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function rollback(name) {
+  if (!confirm('确认回滚到 ' + name + '？\n\n注意：回滚后需要重启服务才能生效。')) return;
+  toast('正在回滚...', 'info');
+  const r = await api('POST', '/api/upgrade/rollback', { version: name });
+  if (r.data.ok) {
+    toast('✅ ' + r.data.message, 'success');
+    loadVersions();
+    // 提示用户是否立即重启
+    setTimeout(() => {
+      if (confirm('回滚成功！是否现在重启服务？\n\n点击“确定”重启，点击“取消”稍后手动执行：bash stop.sh && bash start.sh')) {
+        autoRestart('回滚后重启');
+      }
+    }, 500);
+  } else {
+    toast(r.data.message || '回滚失败', 'error');
+  }
+}
+
+async function deleteVersion(name) {
+  if (!confirm('确认删除备份 ' + name + '？此操作不可恢复！')) return;
+  const r = await api('POST', '/api/versions/delete', { version: name });
+  toast(r.data.message, r.data.ok ? 'success' : 'error');
+  if (r.data.ok) loadVersions();
+}
+
+async function loadProcessInfo() {
+  const r = await api('GET', '/api/process/status');
+  const d = r.data;
+  document.getElementById('statusDot').className = 'status-dot' + (d.running ? '' : ' stopped');
+  document.getElementById('statusText').textContent = d.running ? '运行中' : '已停止';
+  document.getElementById('process-info').innerHTML = `
+    <div class="grid-2">
+      <div><b>状态:</b> ${d.running ? '<span class="tag tag-success">运行</span>' : '<span class="tag tag-danger">停止</span>'}</div>
+      <div><b>PID:</b> ${d.pid || '-'}</div>
+      <div><b>CPU:</b> ${d.cpu ?? '-'}%</div>
+      <div><b>内存:</b> ${d.memory_mb ?? '-'} MB</div>
+      <div><b>运行时长:</b> ${d.uptime_s ? Math.floor(d.uptime_s / 60) + ' 分钟' : '-'}</div>
+    </div>
+  `;
+}
+
+async function restartBot() {
+  if (!confirm('确认重启服务？')) return;
+  await autoRestart('手动重启');
+}
+
+setInterval(loadProcessInfo, 5000);
+
+// ============ 推送文案编辑器 ============
+async function loadPushTemplate() {
+  const r = await api('GET', '/api/push_template');
+  if (r.status === 200) {
+    const data = r.data;
+    document.getElementById('push-template-editor').value = data.template || '';
+    // 填充早间模板编辑器
+    const morningEl = document.getElementById('morning-template-editor');
+    if (morningEl) morningEl.value = data.morning_template || '';
+    
+    // 渲染变量按钮（显示中文描述）
+    const varsEl = document.getElementById('template-variables');
+    if (varsEl && data.variables) {
+      varsEl.innerHTML = data.variables.map(v => 
+        `<button class="btn btn-sm btn-secondary" onclick="insertVariable('${v.key}')" style="font-size: 11px; padding: 4px 8px;" title="插入变量: ${v.key}">${v.desc}</button>`
+      ).join('');
+    }
+  }
+}
+
+// 追踪当前激活的模板编辑器
+let _activeEditor = 'push-template-editor';
+document.addEventListener('focusin', (e) => {
+  if (e.target.id === 'morning-template-editor') _activeEditor = 'morning-template-editor';
+  else if (e.target.id === 'push-template-editor') _activeEditor = 'push-template-editor';
+});
+
+function insertVariable(v) {
+  const el = document.getElementById(_activeEditor) || document.getElementById('push-template-editor');
+  const start = el.selectionStart;
+  const end = el.selectionEnd;
+  const text = el.value;
+  el.value = text.substring(0, start) + v + text.substring(end);
+  el.selectionStart = el.selectionEnd = start + v.length;
+  el.focus();
+}
+
+function insertCloudPreset(key) {
+  // 根据云型 key 插入对应的推送文案片段
+  const presets = {
+    stratocumulus: '📸 层积云晚霞：大面积平铺碎云，适合散步拍照',
+    altocumulus: '📸 高积云鱼鳞晚霞：鱼鳞状排列，广角拍整片天空',
+    cirrus: '📸 卷积云丝缕晚霞：细如发丝，搭配湖面/草坪框架构图',
+    cumulonimbus: '🔥 积雨云火烧晚霞：雨后厚云赤红，抓紧半小时拍摄',
+    stratus: '📸 层云整片晚霞：整片天空橘粉色，随手拍都好看',
+    fire_sky: '🔥 火烧云晚霞：大红橘红铺满天际，黄金5分钟！',
+    blue_hour: '🌆 粉紫暮霭：蓝调时刻冷暖撞色，打开夜景模式',
+    golden: '✨ 金粉薄暮：高空薄云淡金色，远景城市轮廓+金边天空',
+  };
+  const preset = presets[key] || '';
+  if (preset) insertVariable(preset + '\n');
+}
+
+async function savePushTemplate() {
+  const template = document.getElementById('push-template-editor').value;
+  const morning_template = document.getElementById('morning-template-editor').value;
+  if (!template.trim() && !morning_template.trim()) {
+    toast('至少填写一套模板', 'error');
+    return;
+  }
+  const body = {};
+  if (template.trim()) body.template = template;
+  if (morning_template.trim()) body.morning_template = morning_template;
+  const r = await api('POST', '/api/push_template', body);
+  if (r.status === 200) {
+    toast('推送文案已保存', 'success');
+    document.getElementById('push-template-msg').innerHTML = '<span style="color: var(--success);">✓ 已保存</span>';
+    autoRestart('推送文案已更新');
+  } else {
+    toast('保存失败: ' + (r.data.error || '未知错误'), 'error');
+    document.getElementById('push-template-msg').innerHTML = '<span style="color: var(--danger);">✗ ' + (r.data.error || '未知错误') + '</span>';
+  }
+}
+
+async function resetPushTemplate() {
+  // 恢复默认傍晚模板
+  const defaultTemplate = `✨ 晚霞播报 · {location}
+⭐ 评分: {score}/100 ({recommend_tag})
+🌇 日落时间: {sunset_time}
+🌡 温度: {temperature}°C | 💧 湿度: {humidity}%
+☁ 云量: {cloudrate}% (高{cloud_high}/中{cloud_mid}/低{cloud_low})
+💨 风速: {wind}m/s | 👁 能见度: {visibility}km
+🎨 云型: {cloud_type}
+📷 {cloud_tip}
+📦 数据: {data_source}`;
+  document.getElementById('push-template-editor').value = defaultTemplate;
+  // 恢复默认早间模板
+  const defaultMorning = `🌤 早间天气播报 · {location}
+🗓 {skycon}
+🌡 温度: {temp_low}°C ~ {temp_high}°C
+🌅 日出: {sunrise} | 🌇 日落: {sunset_time}
+💧 湿度: {humidity}% | ☁ 云量: {cloudrate}%
+💨 风速: {wind}m/s | 👁 能见度: {visibility}km
+🌧 降水概率: {precip_probability}%
+☀ 紫外线: {uv_desc} | 🫁 AQI: {aqi}
+👔 穿衣: {dressing} | 🚗 洗车: {car_washing}
+🤧 感冒: {cold_risk} | 😌 舒适: {comfort_desc}
+⭐ 晚霞预估: {score}/100 ({recommend_tag})
+📝 {forecast_keypoint}
+📦 数据: {data_source}`;
+  document.getElementById('morning-template-editor').value = defaultMorning;
+  toast('已恢复默认模板（需点保存生效）', 'success');
+}
+
+async function previewPushTemplate() {
+  const template = document.getElementById('push-template-editor').value;
+  const r = await api('POST', '/api/push/preview', { template });
+  if (r.status === 200) {
+    const previewEl = document.getElementById('push-template-preview');
+    const textEl = document.getElementById('preview-text');
+    previewEl.style.display = 'block';
+    textEl.textContent = r.data.preview;
+  } else {
+    toast('预览失败', 'error');
+  }
+}
+
+async function previewMorningTemplate() {
+  const template = document.getElementById('morning-template-editor').value;
+  const r = await api('POST', '/api/push/preview', { template });
+  if (r.status === 200) {
+    const previewEl = document.getElementById('push-template-preview');
+    const textEl = document.getElementById('preview-text');
+    previewEl.style.display = 'block';
+    textEl.textContent = r.data.preview;
+  } else {
+    toast('预览失败', 'error');
+  }
+}
+
+// ============ 页面定时刷新 + 重启后自动刷新 ============
+let refreshTimer = null;
+const REFRESH_INTERVAL = 60000; // 60秒刷新一次数据
+let _pageStartupTime = 0;  // 页面加载时记录的 web_startup_time，用于检测新版本
+let _versionNotified = false;  // 避免重复弹提示
+
+function startAutoRefresh() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  // 记录当前版本的 startup time
+  api('GET', '/api/process/status').then(r => {
+    _pageStartupTime = r.data?.web_startup_time || 0;
+  }).catch(() => {});
+  refreshTimer = setInterval(() => {
+    // 静默刷新当前激活页的数据
+    const activeTab = document.querySelector('.tab-page.active')?.id || '';
+    if (activeTab === 'tab-overview') {
+      loadStats(); loadSunsetInfo();
+    } else if (activeTab === 'tab-credentials') {
+      loadCredentials(); loadCacheInfo();
+    } else if (activeTab === 'tab-logs') {
+      loadLogs(); loadHistory(); loadAuditLogs();
+    }
+    // 检测服务端是否重启过（新版本部署）
+    api('GET', '/api/process/status').then(r => {
+      const newTime = r.data?.web_startup_time || 0;
+      if (_pageStartupTime > 0 && newTime > _pageStartupTime && !_versionNotified) {
+        _versionNotified = true;
+        toast('🆕 检测到新版本已部署，请刷新页面以获取最新功能', 'info', 0);
+      }
+    }).catch(() => {});
+  }, REFRESH_INTERVAL);
+}
+
+async function autoRestart(reason) {
+  toast('⏳ ' + reason + '，正在重启服务...', 'info');
+  try {
+    // 记录重启前的 startup time
+    const statusBefore = await api('GET', '/api/process/status');
+    const oldStartupTime = statusBefore.data?.web_startup_time || 0;
+    await api('POST', '/api/process/restart');
+    // 轮询等待服务恢复（最多等60秒）
+    let attempts = 0;
+    const maxAttempts = 30;
+    const pollInterval = 2000;
+    const pollTimer = setInterval(async () => {
+      attempts++;
+      try {
+        const r = await fetch('/api/process/status', { credentials: 'same-origin' });
+        if (r.ok) {
+          const d = await r.json();
+          const newTime = d.web_startup_time || 0;
+          // startup time 变化 = web.py 已用新进程重启
+          if (d.running && newTime > oldStartupTime) {
+            clearInterval(pollTimer);
+            toast('✅ 服务已重启完成', 'success');
+            setTimeout(() => location.reload(), 500);
+          }
+        }
+      } catch {}
+      if (attempts >= maxAttempts) {
+        clearInterval(pollTimer);
+        toast('⚠️ 重启超时，请手动刷新页面（Ctrl+F5）', 'warning');
+      }
+    }, pollInterval);
+  } catch(e) {
+    toast('重启失败: ' + e.message, 'error');
+  }
+}
+
+// 启动自动刷新
+startAutoRefresh();
+
+// 启动
+checkAuth();
+
+// PWA Service Worker 注册
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js')
+      .then(reg => console.log('PWA Service Worker 已注册'))
+      .catch(err => console.log('PWA Service Worker 注册失败:', err));
+  });
+}
+
+// PWA 安装提示
+let deferredPrompt;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  // 显示安装按钮（可选）
+  console.log('PWA 可安装');
+});
+</script>
+
+<!-- PWA 安装提示弹窗 -->
+<div id="pwa-install-toast" style="display:none;position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--accent);color:white;padding:12px 20px;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.2);z-index:9999;font-size:14px;cursor:pointer;">
+  📱 添加到主屏幕，像 APP 一样使用
+</div>
+<script>
+// 显示 PWA 安装提示
+function showPWAInstallPrompt() {
+  const toast = document.getElementById('pwa-install-toast');
+  if (toast && deferredPrompt) {
+    toast.style.display = 'block';
+    toast.onclick = () => {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then((choice) => {
+        toast.style.display = 'none';
+        deferredPrompt = null;
+      });
+    };
+    setTimeout(() => { toast.style.display = 'none'; }, 10000);
+  }
+}
+
+// ============ AI 晚霞校准 ============
+async function uploadSunsetPhoto() {
+  const fileInput = document.getElementById('calibration-photo');
+  const locSelect = document.getElementById('calibration-loc');
+  const resultDiv = document.getElementById('calibration-result');
+  const btn = document.getElementById('btn-upload-photo');
+
+  if (!fileInput.files.length) {
+    resultDiv.innerHTML = '<div class="alert alert-error">请先选择照片</div>';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = '⏳ 分析中...';
+  resultDiv.innerHTML = '';
+
+  const formData = new FormData();
+  formData.append('photo', fileInput.files[0]);
+  formData.append('location_id', locSelect.value || '');
+
+  try {
+    const res = await fetch('/api/sunset/photo', {
+      method: 'POST',
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      resultDiv.innerHTML = `<div class="alert alert-error">${data.error}</div>`;
+      return;
+    }
+    const ai = data.ai_result;
+    const predInfo = data.predicted_score !== null && data.predicted_score !== undefined 
+      ? `预测评分: <strong>${data.predicted_score}</strong> | `
+      : '<span class="text-muted">未找到当天推送记录</span><br>';
+    resultDiv.innerHTML = `
+      <div class="alert alert-success">
+        <strong>✅ 分析完成</strong><br>
+        📅 拍摄时间: <strong>${data.photo_datetime}</strong> | ${predInfo}AI评分: <strong>${ai.ai_score}</strong>/100<br>
+        云量: ${ai.cloud_coverage}% | 色彩: ${ai.color_saturation}/100<br>
+        ${ai.description}<br>
+        <small>本次偏移: ${data.this_offset > 0 ? '+' : ''}${data.this_offset} | 累计校准偏移: ${data.calibration_offset > 0 ? '+' : ''}${data.calibration_offset}</small>
+      </div>
+    `;
+    loadPhotoHistory();
+  } catch (e) {
+    resultDiv.innerHTML = `<div class="alert alert-error">上传失败: ${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '📤 上传并分析';
+  }
+}
+
+async function loadPhotoHistory() {
+  const listDiv = document.getElementById('photo-history-list');
+  try {
+    const res = await fetch('/api/sunset/photos');
+    const data = await res.json();
+    if (!data.photos || !data.photos.length) {
+      listDiv.innerHTML = '<p class="text-muted">暂无分析记录</p>';
+      return;
+    }
+    let html = '<table class="table"><thead><tr><th>时间</th><th>预测</th><th>AI</th><th>偏移</th><th>描述</th></tr></thead><tbody>';
+    for (const p of data.photos) {
+      const dt = new Date(p.created_at * 1000).toLocaleString('zh-CN');
+      const offset = p.calibration_offset > 0 ? `+${p.calibration_offset}` : p.calibration_offset;
+      html += `<tr><td>${dt}</td><td>${p.predicted_score || '-'}</td><td>${p.ai_score}</td><td>${offset}</td><td>${p.ai_description || '-'}</td></tr>`;
+    }
+    html += '</tbody></table>';
+    html += `<p class="text-muted mt-2">当前 AI 校准偏移: <strong>${data.current_offset > 0 ? '+' : ''}${data.current_offset}</strong></p>`;
+    listDiv.innerHTML = html;
+  } catch (e) {
+    listDiv.innerHTML = '<p class="text-muted">加载失败</p>';
+  }
+}
+
+async function clearPhotoHistory() {
+  if (!confirm('确定清除所有 AI 分析记录？此操作不可恢复。')) return;
+  try {
+    const res = await fetch('/api/sunset/photos/clear', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      toast('已清除所有分析记录', 'success');
+      loadPhotoHistory();
+    } else {
+      toast(data.error || '清除失败', 'error');
+    }
+  } catch (e) {
+    toast('清除失败: ' + e.message, 'error');
+  }
+}
+
+// 初始化校准页面
+function initCalibrationPage() {
+  loadPhotoHistory();
+  // 填充地点下拉
+  fetch('/api/locations').then(r => r.json()).then(data => {
+    const locs = Array.isArray(data) ? data : (data.locations || []);
+    const sel = document.getElementById('calibration-loc');
+    if (sel && locs) {
+      sel.innerHTML = locs.map(l => `<option value="${l.id}">${l.name}</option>`).join('');
+    }
+  }).catch(() => {});
+}
+
+// 监听 tab 切换
+const origSwitchTab = window.switchTab;
+window.switchTab = function(tab) {
+  origSwitchTab(tab);
+  if (tab === 'score') {
+    initCalibrationPage();
+  }
+  if (tab === 'overview') {
+    loadScoreCharts();
+  }
+};
+
+// ==================== 评分雷达图 + 趋势图 ====================
+let radarChart = null;
+let trendChart = null;
+
+function loadScoreCharts() {
+  fetch('/api/score/trend').then(r => r.json()).then(data => {
+    renderRadarChart(data.latest);
+    renderTrendChart(data.trend);
+  }).catch(() => {});
+}
+
+function renderRadarChart(detail) {
+  const canvas = document.getElementById('radar-chart');
+  const emptyEl = document.getElementById('radar-empty');
+  if (!detail || !detail.cloudrate) {
+    canvas.style.display = 'none';
+    emptyEl.style.display = 'block';
+    return;
+  }
+  canvas.style.display = 'block';
+  emptyEl.style.display = 'none';
+  // 将原始值归一化到 0-100 范围
+  const factors = [
+    { label: '云量', val: detail.cloudrate || 0, max: 100 },
+    { label: '高云', val: detail.cloud_high || 0, max: 100 },
+    { label: '中云', val: detail.cloud_mid || 0, max: 100 },
+    { label: '湿度', val: detail.humidity || 0, max: 100 },
+    { label: '风速', val: Math.min((detail.wind || 0) / 10 * 100, 100), max: 100 },
+    { label: '能见度', val: Math.min((detail.visibility || 0) / 20 * 100, 100), max: 100 },
+  ];
+  if (radarChart) radarChart.destroy();
+  radarChart = new Chart(canvas, {
+    type: 'radar',
+    data: {
+      labels: factors.map(f => f.label),
+      datasets: [{
+        label: `评分 ${detail.score || 0}分`,
+        data: factors.map(f => Math.round(f.val)),
+        backgroundColor: 'rgba(124, 58, 237, 0.15)',
+        borderColor: '#7c3aed',
+        borderWidth: 2,
+        pointBackgroundColor: '#7c3aed',
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        r: {
+          beginAtZero: true, max: 100,
+          ticks: { stepSize: 25, display: false },
+          grid: { color: 'rgba(124,58,237,0.1)' },
+          pointLabels: { font: { size: 11 } }
+        }
+      },
+      plugins: { legend: { display: true, position: 'bottom', labels: { font: { size: 11 } } } }
+    }
+  });
+}
+
+function renderTrendChart(trend) {
+  const canvas = document.getElementById('trend-chart');
+  const emptyEl = document.getElementById('trend-empty');
+  if (!trend || trend.length === 0) {
+    canvas.style.display = 'none';
+    emptyEl.style.display = 'block';
+    return;
+  }
+  canvas.style.display = 'block';
+  emptyEl.style.display = 'none';
+  if (trendChart) trendChart.destroy();
+  trendChart = new Chart(canvas, {
+    type: 'line',
+    data: {
+      labels: trend.map(t => t.day.slice(5)), // MM-DD
+      datasets: [
+        {
+          label: '最高分', data: trend.map(t => t.max),
+          borderColor: '#7c3aed', backgroundColor: 'rgba(124,58,237,0.1)',
+          fill: true, tension: 0.3, pointRadius: 4,
+        },
+        {
+          label: '平均分', data: trend.map(t => t.avg),
+          borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)',
+          fill: false, tension: 0.3, pointRadius: 3, borderDash: [5, 3],
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        y: { beginAtZero: true, max: 100, grid: { color: 'rgba(124,58,237,0.08)' } },
+        x: { grid: { display: false } }
+      },
+      plugins: { legend: { position: 'bottom', labels: { font: { size: 11 } } } }
+    }
+  });
+}
+
+// 初始化时加载图表
+loadScoreCharts();
+
+// ==================== 准确率分析 ====================
+let accuracyChart = null;
+
+function cleanupPushHistory() {
+  if (!confirm('确定要清理所有测试推送和手动推送记录吗？\n（只保留自动定时推送的记录，清理后会自动重启服务）')) return;
+  fetch('/api/process/restart', { 
+    method: 'POST', 
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ cleanup_push_history: true }),
+    credentials: 'same-origin' 
+  })
+    .then(r => r.json())
+    .then(data => {
+      if (data.ok) {
+        toast('正在清理并重启服务...', 'success');
+        // 等待重启完成后刷新数据
+        setTimeout(() => { loadAccuracyStats(); loadStats(); }, 10000);
+      } else {
+        toast('清理失败: ' + (data.error || '未知错误'), 'error');
+      }
+    })
+    .catch(e => toast('清理失败: ' + e.message, 'error'));
+}
+
+function loadAccuracyStats() {
+  fetch('/api/accuracy').then(r => r.json()).then(data => {
+    const el = document.getElementById('accuracy-stats');
+    if (!el) return;
+    const dist = data.score_distribution || {};
+    const total = data.total_pushes || 0;
+    const goodPct = total > 0 ? Math.round((dist.good + dist.excellent) / total * 100) : 0;
+    el.innerHTML = `
+      <div class="stats-grid" style="grid-template-columns: repeat(4, 1fr); gap: 12px;">
+        <div class="stat-card"><div class="stat-label">总推送</div><div class="stat-value">${total}</div><div class="stat-sub">${data.period}</div></div>
+        <div class="stat-card"><div class="stat-label">优良率</div><div class="stat-value" style="color:var(--success)">${goodPct}%</div><div class="stat-sub">≥65分</div></div>
+        <div class="stat-card"><div class="stat-label">校准次数</div><div class="stat-value">${data.calibration_count}</div><div class="stat-sub">AI偏移修正</div></div>
+        <div class="stat-card"><div class="stat-label">平均偏移</div><div class="stat-value">${data.avg_calibration_offset}</div><div class="stat-sub">分</div></div>
+      </div>
+    `;
+    // 渲染分数段分布图
+    renderAccuracyChart(dist);
+  }).catch(() => {});
+}
+
+function renderAccuracyChart(dist) {
+  const canvas = document.getElementById('accuracy-chart');
+  const emptyEl = document.getElementById('accuracy-empty');
+  const total = (dist.excellent||0) + (dist.good||0) + (dist.fair||0) + (dist.poor||0);
+  if (total === 0) { canvas.style.display = 'none'; emptyEl.style.display = 'block'; return; }
+  canvas.style.display = 'block'; emptyEl.style.display = 'none';
+  if (accuracyChart) accuracyChart.destroy();
+  accuracyChart = new Chart(canvas, {
+    type: 'doughnut',
+    data: {
+      labels: ['优秀 (≥80)', '良好 (65-79)', '一般 (50-64)', '较差 (<50)'],
+      datasets: [{
+        data: [dist.excellent, dist.good, dist.fair, dist.poor],
+        backgroundColor: ['#7c3aed', '#10b981', '#f59e0b', '#ef4444'],
+        borderWidth: 0,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, padding: 12 } } }
+    }
+  });
+}
+
+// 切换到评分 tab 时加载准确率
+const origSwitchSubTab = window.switchSubTab;
+window.switchSubTab = function(tab) {
+  origSwitchSubTab(tab);
+  if (tab === 'score-accuracy') {
+    setTimeout(loadAccuracyStats, 100);
+  }
+};
+</script>
+
+<!-- ==================== SSH 终端（xterm.js 真终端，实时按键发送） ==================== -->
+<script>
+(function() {
+  let ws = null;
+  let term = null;
+  let termReady = false;
+  let wsConnId = 0;  // 连接 ID，用于丢弃旧连接的过期回调
+
+  const statusEl = () => document.getElementById('term-status');
+
+  function setStatus(text, color) {
+    const el = statusEl();
+    if (!el) return;
+    el.textContent = text;
+    el.style.background = color || 'var(--text-muted)';
+  }
+
+  let fitAddon = null;
+
+  function initTerminal() {
+    if (termReady) return;
+    const mountEl = document.getElementById('xterm-mount');
+    if (!mountEl) { setTimeout(initTerminal, 200); return; }
+    if (typeof Terminal === 'undefined') { setTimeout(initTerminal, 300); return; }
+
+    term = new Terminal({
+      cursorBlink: true,
+      fontSize: 15,
+      fontFamily: "'Courier New', 'Consolas', 'Monaco', monospace",
+      theme: {
+        background: '#000000',
+        foreground: '#d4d4d4',
+        cursor: '#d4d4d4',
+        cursorAccent: '#000000',
+        selectionBackground: '#264f78',
+        selectionForeground: '#ffffff',
+        // 标准 8 色（经典终端色）
+        black: '#000000',
+        red: '#cc0000',
+        green: '#4e9a06',
+        yellow: '#c4a000',
+        blue: '#3465a4',
+        magenta: '#75507b',
+        cyan: '#06989a',
+        white: '#d3d7cf',
+        // 高亮 8 色
+        brightBlack: '#555753',
+        brightRed: '#ef2929',
+        brightGreen: '#8ae234',
+        brightYellow: '#fce94f',
+        brightBlue: '#729fcf',
+        brightMagenta: '#ad7fa8',
+        brightCyan: '#34e2e2',
+        brightWhite: '#eeeeec',
+      },
+      convertEol: true,
+      scrollback: 5000,
+    });
+    // 加载 FitAddon 让终端自动撑满容器宽度
+    if (typeof FitAddon !== 'undefined') {
+      fitAddon = new FitAddon.FitAddon();
+      term.loadAddon(fitAddon);
+    }
+    term.open(mountEl);
+    if (fitAddon) { try { fitAddon.fit(); } catch(e) {} }
+    termReady = true;
+
+    // xterm.js onData：每个按键实时发给 PTY
+    term.onData(function(data) {
+      if (ws && ws.readyState === 1) {
+        ws.send(data);
+      }
+    });
+
+    // xterm.js onResize：同步终端尺寸到 PTY
+    term.onResize(function(size) {
+      if (ws && ws.readyState === 1) {
+        ws.send(JSON.stringify({ type: 'resize', cols: size.cols, rows: size.rows }));
+      }
+    });
+
+    connectWs();
+  }
+
+  function connectWs() {
+    if (ws && (ws.readyState === 0 || ws.readyState === 1)) {
+      try { ws.close(); } catch(e) {}
+    }
+    const myConnId = ++wsConnId;  // 递增连接 ID，旧连接的回调会自动失效
+    setStatus('连接中...', 'var(--warning)');
+    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsPort = parseInt(location.port || 80) + 1;
+    const wsToken = '/*WS_TOKEN_PLACEHOLDER*/';
+    try {
+      ws = new WebSocket(`${proto}//${location.hostname}:${wsPort}/?ws_token=${wsToken}`);
+      ws.binaryType = 'arraybuffer';
+    } catch (e) {
+      setStatus('连接失败', 'var(--danger)');
+      if (term) term.writeln('\r\n\x1b[31m[ 连接失败: ' + e.message + ' ]\x1b[0m');
+      return;
+    }
+
+    ws.onopen = function() {
+      if (myConnId !== wsConnId) return;  // 过期连接，忽略
+      setStatus('已连接', 'var(--success)');
+      // 不往终端写连接状态，避免覆盖 shell 初始提示符（状态栏已足够显示）
+      if (term) term.focus();
+      // 发送初始终端尺寸
+      if (term) {
+        ws.send(JSON.stringify({ type: 'resize', cols: term.cols, rows: term.rows }));
+      }
+    };
+
+    ws.onmessage = function(ev) {
+      if (myConnId !== wsConnId) return;  // 过期连接，忽略
+      if (!term) return;
+      if (ev.data instanceof ArrayBuffer) {
+        term.write(new Uint8Array(ev.data));
+      } else {
+        term.write(ev.data);
+      }
+    };
+
+    ws.onclose = function() {
+      if (myConnId !== wsConnId) return;  // 旧连接的延迟关闭回调，忽略
+      setStatus('已断开', 'var(--danger)');
+      if (term) term.writeln('\r\n\x1b[31m[ 连接已断开，点击"重连"按钮重新连接 ]\x1b[0m');
+    };
+
+    ws.onerror = function() {
+      if (myConnId !== wsConnId) return;
+      setStatus('连接错误', 'var(--danger)');
+    };
+  }
+
+  // 全局函数供按钮调用
+  window.termReconnect = function() {
+    if (term) term.clear();
+    connectWs();
+  };
+
+  window.termClear = function() {
+    if (term) term.clear();
+  };
+
+  // 上传文件
+  window.termUploadFile = function() {
+    document.getElementById('term-file-input').click();
+  };
+  window.termDoUpload = function(input) {
+    if (!input.files.length) return;
+    let fd = new FormData();
+    for (let f of input.files) fd.append('files', f, f.name);
+    fetch('/api/terminal/upload', { method: 'POST', body: fd })
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok) {
+          if (term) term.writeln('\r\n\x1b[32m[ 上传成功: ' + d.files.join(', ') + ' ]\x1b[0m');
+        } else {
+          if (term) term.writeln('\r\n\x1b[31m[ 上传失败: ' + (d.error || '未知错误') + ' ]\x1b[0m');
+        }
+      })
+      .catch(e => { if (term) term.writeln('\r\n\x1b[31m[ 上传异常: ' + e.message + ' ]\x1b[0m'); });
+    input.value = '';
+  };
+
+  // 下载文件
+  window.termDownloadFile = function() {
+    let path = prompt('输入要下载的文件路径（留空则下载服务目录下的文件）:');
+    if (path === null) return;
+    if (!path) { alert('请输入文件路径'); return; }
+    let a = document.createElement('a');
+    a.href = '/api/terminal/download?path=' + encodeURIComponent(path);
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    if (term) term.writeln('\r\n\x1b[32m[ 正在下载: ' + path + ' ]\x1b[0m');
+  };
+
+  // 文件浏览器
+  let fbCurrentPath = '/';
+  window.toggleFileBrowser = function() {
+    let panel = document.getElementById('file-browser-panel');
+    if (panel.style.display === 'none') {
+      panel.style.display = 'block';
+      fbLoadDir('/');
+    } else {
+      panel.style.display = 'none';
+    }
+  };
+  window.fbGoUp = function() {
+    let p = fbCurrentPath;
+    if (p === '/') return;
+    let parent = p.substring(0, p.lastIndexOf('/')) || '/';
+    fbLoadDir(parent);
+  };
+  window.fbLoadDir = function(path) {
+    fbCurrentPath = path;
+    document.getElementById('fb-path').textContent = path;
+    let list = document.getElementById('fb-list');
+    list.innerHTML = '<div style="color:#888;font-size:12px;">加载中...</div>';
+    fetch('/api/filebrowser/list?path=' + encodeURIComponent(path))
+      .then(r => r.json())
+      .then(d => {
+        if (!d.ok) { list.innerHTML = '<div style="color:#bf616a;font-size:12px;">' + (d.error || '加载失败') + '</div>'; return; }
+        let html = '';
+        d.items.forEach(function(item) {
+          let icon = item.is_dir ? '📁' : '📄';
+          let color = item.is_dir ? '#88c0d0' : '#d4d4d4';
+          let sizeStr = item.is_dir ? '' : fbFormatSize(item.size);
+          let timeStr = fbFormatTime(item.mtime);
+          html += '<div style="display:flex;align-items:center;padding:3px 6px;cursor:pointer;border-radius:4px;" ' +
+            'onmouseover="this.style.background=\'#2a2a4e\'" onmouseout="this.style.background=\'transparent\'" ' +
+            'onclick="fbItemClick(\'' + path.replace(/'/g, "\\'") + '/' + item.name.replace(/'/g, "\\'") + '\',' + item.is_dir + ')">' +
+            '<span style="margin-right:6px;">' + icon + '</span>' +
+            '<span style="color:' + color + ';font-size:12px;font-family:monospace;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + item.name + '</span>' +
+            '<span style="color:#666;font-size:11px;margin-left:8px;white-space:nowrap;">' + sizeStr + '</span>' +
+            '<span style="color:#555;font-size:11px;margin-left:8px;white-space:nowrap;">' + timeStr + '</span>' +
+            '</div>';
+        });
+        list.innerHTML = html || '<div style="color:#666;font-size:12px;">空目录</div>';
+      })
+      .catch(e => { list.innerHTML = '<div style="color:#bf616a;font-size:12px;">加载异常</div>'; });
+  };
+  window.fbItemClick = function(fullPath, isDir) {
+    if (isDir) {
+      fbLoadDir(fullPath);
+    } else {
+      // 文件：复制到终端命令行
+      if (term && ws && ws.readyState === 1) {
+        ws.send(fullPath);
+        term.focus();
+      }
+    }
+  };
+  function fbFormatSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+  function fbFormatTime(ts) {
+    let d = new Date(ts * 1000);
+    return (d.getMonth()+1) + '/' + d.getDate() + ' ' + d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+  }
+
+  // 点击日志区 SSH 子 tab 时调用
+  window.initTermOnShow = function() {
+    setTimeout(() => {
+      if (!termReady) {
+        initTerminal();
+      } else {
+        if (fitAddon) { try { fitAddon.fit(); } catch(e) {} }
+        if (term) term.focus();
+        if (!ws || ws.readyState !== 1) {
+          connectWs();
+        }
+      }
+    }, 150);
+  };
+})();
+</script>
+</body>
+</html>

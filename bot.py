@@ -1452,6 +1452,62 @@ def check_github_update(force=False):
     return result
 
 
+def download_github_release():
+    """
+    从 GitHub 下载最新 Release 的源码包，返回 {filename: bytes}。
+    仅保留白名单内的文件。失败返回 (None, error_msg)。
+    """
+    import io, zipfile
+    repo = get_config("github_repo", "")
+    if not repo:
+        return None, "未配置 GitHub 仓库地址"
+
+    try:
+        # 获取最新 release 信息
+        url = f"https://api.github.com/repos/{repo}/releases/latest"
+        resp = get_http_session().get(url, timeout=API_TIMEOUT)
+        if resp.status_code != 200:
+            return None, f"GitHub API 返回 {resp.status_code}"
+        data = resp.json()
+        tag = data.get("tag_name", "")
+        if not tag:
+            return None, "Release 无 tag_name"
+
+        # 下载源码 zip
+        zip_url = f"https://api.github.com/repos/{repo}/zipball/{tag}"
+        log.info(f"[更新] 下载 GitHub Release: {tag}")
+        resp = get_http_session().get(zip_url, timeout=60)
+        if resp.status_code != 200:
+            return None, f"下载源码失败: HTTP {resp.status_code}"
+
+        # 解压并提取白名单文件
+        zf = zipfile.ZipFile(io.BytesIO(resp.content))
+        files = {}
+        # zip 内第一层目录名是 repo-commitHash，需要跳过
+        for name in zf.namelist():
+            # 去掉第一层目录前缀
+            parts = name.split("/", 1)
+            if len(parts) < 2:
+                continue
+            rel_path = parts[1]
+            if not rel_path or rel_path.endswith("/"):
+                continue
+            # 只保留白名单文件
+            if rel_path in UPGRADE_ALLOWED_FILES:
+                files[rel_path] = zf.read(name)
+        zf.close()
+
+        if not files:
+            return None, "源码包中无匹配的可更新文件"
+
+        log.info(f"[更新] 从 GitHub 提取 {len(files)} 个文件: {list(files.keys())}")
+        return files, None
+
+    except Exception as e:
+        log.warning(f"[更新] 下载 GitHub Release 异常: {e}")
+        return None, f"下载异常: {e}"
+
+
 # ==================== 预约推送持久化 ===================
 def save_scheduled_push(push_time, sunset_time, sunset_offset, location_id):
     """保存预约任务到数据库"""

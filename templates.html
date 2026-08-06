@@ -1419,6 +1419,7 @@
           <input type="text" id="updateRepoInput" class="form-input" placeholder="owner/repo（如 sunset-bot/sunset-bot）" style="width: 280px; font-size: 13px;">
           <button class="btn btn-secondary" onclick="checkUpdate()" id="updateCheckBtn">🔍 检查更新</button>
           <a id="updateReleaseLink" href="#" target="_blank" style="display: none; font-size: 13px;">📋 查看 Release</a>
+          <button class="btn btn-success" id="updateApplyBtn" onclick="applyUpdate()" style="display: none;">⬇️ 一键更新</button>
         </div>
         <div id="update-msg" class="mt-2 text-muted" style="font-size: 13px;"></div>
       </div>
@@ -3413,16 +3414,19 @@ async function loadUpdateStatus() {
     }
     const badge = document.getElementById('updateStatusBadge');
     const link = document.getElementById('updateReleaseLink');
+    const applyBtn = document.getElementById('updateApplyBtn');
     if (d.has_update) {
       badge.textContent = '🎉 有新版本';
       badge.style.background = 'rgba(34,197,94,0.15)';
       badge.style.color = 'var(--success)';
       if (d.release_url) { link.href = d.release_url; link.style.display = 'inline'; }
+      applyBtn.style.display = 'inline-block';
     } else {
       badge.textContent = '✓ 已是最新';
       badge.style.background = 'rgba(34,197,94,0.15)';
       badge.style.color = 'var(--success)';
       link.style.display = 'none';
+      applyBtn.style.display = 'none';
     }
   } catch (e) { /* ignore */ }
 }
@@ -3440,18 +3444,21 @@ async function checkUpdate() {
     document.getElementById('updateCurrentVer').textContent = 'v' + d.current;
     const badge = document.getElementById('updateStatusBadge');
     const link = document.getElementById('updateReleaseLink');
+    const applyBtn = document.getElementById('updateApplyBtn');
     if (d.error) {
       badge.textContent = '检查失败';
       badge.style.background = 'rgba(239,68,68,0.15)';
       badge.style.color = 'var(--danger)';
       msgEl.innerHTML = `<span style="color: var(--danger);">${d.error}</span>`;
+      applyBtn.style.display = 'none';
     } else if (d.has_update) {
       badge.textContent = '🎉 有新版本';
       badge.style.background = 'rgba(34,197,94,0.15)';
       badge.style.color = 'var(--success)';
       document.getElementById('updateLatestVer').textContent = 'v' + d.latest;
       if (d.release_url) { link.href = d.release_url; link.style.display = 'inline'; }
-      msgEl.innerHTML = `<span style="color: var(--success);">发现新版本 v${d.latest}，可下载后通过上方"上传新版本"进行升级</span>`;
+      applyBtn.style.display = 'inline-block';
+      msgEl.innerHTML = `<span style="color: var(--success);">发现新版本 v${d.latest}，点击"一键更新"自动升级</span>`;
       toast(`发现新版本 v${d.latest}！`, 'success');
     } else {
       badge.textContent = '✓ 已是最新';
@@ -3459,6 +3466,7 @@ async function checkUpdate() {
       badge.style.color = 'var(--success)';
       document.getElementById('updateLatestVer').textContent = 'v' + d.latest;
       link.style.display = 'none';
+      applyBtn.style.display = 'none';
       msgEl.innerHTML = '<span style="color: var(--success);">当前已是最新版本 ✓</span>';
     }
   } catch (e) {
@@ -3466,6 +3474,34 @@ async function checkUpdate() {
   } finally {
     btn.disabled = false;
     btn.textContent = '🔍 检查更新';
+  }
+}
+
+async function applyUpdate() {
+  if (!confirm('将从 GitHub 下载最新版本并自动更新，更新前会自动备份当前版本。\n\n确定要更新吗？')) return;
+  const btn = document.getElementById('updateApplyBtn');
+  const msgEl = document.getElementById('update-msg');
+  btn.disabled = true;
+  btn.textContent = '⏳ 下载中...';
+  msgEl.innerHTML = '<span style="color: var(--text-secondary);">正在从 GitHub 下载最新版本...</span>';
+  try {
+    const r = await api('POST', '/api/update/apply');
+    const d = r.data;
+    if (d.ok) {
+      msgEl.innerHTML = `<span style="color: var(--success);">✅ 更新成功！已更新 ${d.files.length} 个文件，备份: ${d.backup}，正在重启...</span>`;
+      toast('更新成功，正在重启...', 'success');
+      // 自动重启
+      try { restartBot(); } catch(e) {}
+    } else {
+      msgEl.innerHTML = `<span style="color: var(--danger);">更新失败: ${d.error}</span>`;
+      toast('更新失败: ' + d.error, 'error');
+    }
+  } catch (e) {
+    msgEl.innerHTML = `<span style="color: var(--danger);">更新失败: ${e.message}</span>`;
+    toast('更新失败: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⬇️ 一键更新';
   }
 }
 

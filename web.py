@@ -537,6 +537,7 @@ class Handler(BaseHTTPRequestHandler):
             "/api/config/score_offset": self.api_set_score_offset,
             "/api/terminal/upload": self.api_terminal_upload,
             "/api/update/check": self.api_update_check,
+            "/api/update/apply": self.api_update_apply,
         }
         handler_fn = routes.get(path)
         if handler_fn:
@@ -1446,6 +1447,20 @@ class Handler(BaseHTTPRequestHandler):
         result["github_repo"] = bot.get_config("github_repo", "")
         bus.publish("update_checked", result)
         json_response(self, result)
+
+    def api_update_apply(self):
+        """从 GitHub 一键下载并应用更新"""
+        files, err = bot.download_github_release()
+        if err:
+            json_response(self, {"ok": False, "error": err}, 400)
+            return
+        ok, msg = bot.apply_uploaded_files(files)
+        if not ok:
+            json_response(self, {"ok": False, "error": msg}, 400)
+            return
+        bot.audit("GitHub 一键更新", str(list(files.keys())), f"更新 {len(files)} 个文件，备份={msg}")
+        bus.publish("upgrade_applied", {"files": list(files.keys()), "backup": msg})
+        json_response(self, {"ok": True, "backup": msg, "files": list(files.keys()), "restart_required": True})
 
     # ============ 进程管理 ============
     def api_process_status(self):
